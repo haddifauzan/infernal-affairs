@@ -142,8 +142,8 @@ func _start_battle_scene() -> void:
 	# Build HUD and connect it to the manager
 	battle_hud = BattleHUD.new()
 	battle_hud.name = "BattleHUD"
-	add_child(battle_hud)
 	battle_hud.init(battle_manager)
+	add_child(battle_hud)
 
 	# Start with full HP (or carry partial HP in future extension)
 	battle_manager.start_battle(BattleState.MAX_HP, BattleState.MAX_HP)

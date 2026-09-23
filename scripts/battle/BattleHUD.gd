@@ -127,12 +127,15 @@ func init(manager: BattleManager) -> void:
 	_manager.turn_changed.connect(_on_turn_changed)
 	_manager.debug_updated.connect(_on_debug_updated)
 	_manager.npc_thinking.connect(_on_npc_thinking)
+	_refresh_debug_config()
 
 func _ready() -> void:
 	layer = 10
 	_build_ui()
 	_update_positions()
 	get_viewport().size_changed.connect(_update_positions)
+	if is_instance_valid(_combat_stage) and not _combat_stage.resized.is_connected(_update_positions):
+		_combat_stage.resized.connect(_update_positions)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # UI BUILD
@@ -626,11 +629,12 @@ func _build_experiment_panel() -> void:
 	btn_minus.text = " - "
 	btn_minus.custom_minimum_size = Vector2(28, 20)
 	btn_minus.add_theme_font_size_override("font_size", 9)
-	btn_minus.pressed.connect(func(): _set_ai_depth(_manager.ai_depth - 1))
+	btn_minus.pressed.connect(func(): _change_ai_depth_by(-1))
 	depth_row.add_child(btn_minus)
 
+	var cur_depth: int = _manager.ai_depth if _manager != null else 3
 	_lbl_depth_val = Label.new()
-	_lbl_depth_val.text = "  %d Plies  " % _manager.ai_depth
+	_lbl_depth_val.text = "  %d Plies  " % cur_depth
 	_lbl_depth_val.add_theme_font_size_override("font_size", 10)
 	_lbl_depth_val.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2))
 	depth_row.add_child(_lbl_depth_val)
@@ -639,7 +643,7 @@ func _build_experiment_panel() -> void:
 	btn_plus.text = " + "
 	btn_plus.custom_minimum_size = Vector2(28, 20)
 	btn_plus.add_theme_font_size_override("font_size", 9)
-	btn_plus.pressed.connect(func(): _set_ai_depth(_manager.ai_depth + 1))
+	btn_plus.pressed.connect(func(): _change_ai_depth_by(+1))
 	depth_row.add_child(btn_plus)
 
 	for d in [1, 2, 3, 4, 5, 6]:
@@ -724,6 +728,12 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_demon_turn_badge) and _demon_turn_badge.visible:
 		var demon_bob := sin(_idle_time * 4.0) * 4.0
 		_demon_turn_badge.position.y = -205.0 + demon_bob
+
+	# 5. Continuous position lock when not in dash attack animation
+	if is_instance_valid(_player_node) and not _player_animating:
+		_player_node.position = _player_base_pos
+	if is_instance_valid(_demon_node) and not _demon_animating:
+		_demon_node.position = _demon_base_pos
 
 # ─────────────────────────────────────────────────────────────────────────────
 # POSITION & RESPONSIVENESS
@@ -1035,7 +1045,20 @@ func _toggle_debug_sidebar() -> void:
 	_debug_visible = not _debug_visible
 	_debug_sidebar.visible = _debug_visible
 	_btn_toggle_dbg.text = "🔍 Debug Overlay [D]" if _debug_visible else "🔍 Show Debug [D]"
-	call_deferred("_update_positions")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_update_positions()
+
+func _set_ai_depth(new_depth: int) -> void:
+	if _manager == null:
+		return
+	_manager.ai_depth = clampi(new_depth, 1, 6)
+	_refresh_debug_config()
+
+func _change_ai_depth_by(diff: int) -> void:
+	if _manager == null:
+		return
+	_set_ai_depth(_manager.ai_depth + diff)
 
 func _refresh_debug_config() -> void:
 	if _manager == null:
@@ -1050,6 +1073,8 @@ func _refresh_debug_config() -> void:
 		_lbl_eval.text = eval_names[_manager.ai_eval_func]
 	if is_instance_valid(_lbl_depth):
 		_lbl_depth.text = "%d Plies" % _manager.ai_depth
+	if is_instance_valid(_lbl_depth_val):
+		_lbl_depth_val.text = "  %d Plies  " % _manager.ai_depth
 	if is_instance_valid(_lbl_order):
 		_lbl_order.text = order_names[_manager.ai_action_order]
 
@@ -1250,6 +1275,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_4:
 			if not _is_busy_animating and _manager != null and _manager.is_active and _manager.state.turn == BattleState.Turn.PLAYER:
 				_execute_player_choice(MinimaxSolver.Action.POTION)
+		KEY_MINUS:
+			_change_ai_depth_by(-1)
+		KEY_EQUAL:
+			_change_ai_depth_by(+1)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WIDGET & FACTORY HELPERS
