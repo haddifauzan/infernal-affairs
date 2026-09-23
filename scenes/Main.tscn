@@ -1,0 +1,58 @@
+[gd_scene load_steps=10 format=3 uid="uid://c83xqmmse80r8"]
+
+[ext_resource type="Script" path="res://scripts/Main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/core/GridManager.gd" id="2_grid"]
+[ext_resource type="Script" path="res://scripts/core/ArenaMap.gd" id="3_arena"]
+[ext_resource type="Script" path="res://scripts/core/FrontierVisualizer.gd" id="4_frontier"]
+[ext_resource type="Script" path="res://scripts/core/PathDotVisualizer.gd" id="5_pathdot"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="6_player"]
+[ext_resource type="PackedScene" path="res://scenes/Demon.tscn" id="7_demon"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="GridManager" type="Node" parent="."]
+script = ExtResource("2_grid")
+
+[node name="ArenaMap" type="Node2D" parent="."]
+script = ExtResource("3_arena")
+
+[node name="FrontierVisualizer" type="Node2D" parent="."]
+script = ExtResource("4_frontier")
+
+[node name="PathDotVisualizer" type="Node2D" parent="."]
+script = ExtResource("5_pathdot")
+
+[node name="Player" parent="." instance=ExtResource("6_player")]
+z_index = 10
+
+[node name="Demon" parent="." instance=ExtResource("7_demon")]
+z_index = 10
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(384, 288)
+zoom = Vector2(1.5, 1.5)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="InfoPanel" type="PanelContainer" parent="CanvasLayer"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = 70.0
+grow_horizontal = 2
+
+[node name="VBox" type="VBoxContainer" parent="CanvasLayer/InfoPanel"]
+layout_mode = 2
+
+[node name="AlgoLabel" type="Label" parent="CanvasLayer/InfoPanel/VBox"]
+layout_mode = 2
+text = "Algoritma: A* (Heuristic)"
+horizontal_alignment = 1
+
+[node name="InfoLabel" type="Label" parent="CanvasLayer/InfoPanel/VBox"]
+layout_mode = 2
+text = "Memuat..."
+horizontal_alignment = 1
