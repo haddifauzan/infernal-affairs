@@ -1279,6 +1279,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_change_ai_depth_by(-1)
 		KEY_EQUAL:
 			_change_ai_depth_by(+1)
+		KEY_Z:
+			if _manager: _manager.ai_action_order = MinimaxSolver.ActionOrder.DEFAULT; _refresh_debug_config()
+		KEY_X:
+			if _manager: _manager.ai_action_order = MinimaxSolver.ActionOrder.AGGRESSIVE; _refresh_debug_config()
+		KEY_C:
+			if _manager: _manager.ai_action_order = MinimaxSolver.ActionOrder.DEFENSIVE; _refresh_debug_config()
+		KEY_V:
+			if _manager: _manager.ai_action_order = MinimaxSolver.ActionOrder.RANDOM; _refresh_debug_config()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WIDGET & FACTORY HELPERS
