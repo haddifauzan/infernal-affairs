@@ -82,6 +82,10 @@ var _btn_toggle_dbg: Button
 var _btn_toggle_exp: Button
 var _btn_copy_exp:   Button
 var _lbl_depth_val: Label
+var _algo_btns:      Array[Button] = []
+var _eval_btns:      Array[Button] = []
+var _order_btns:     Array[Button] = []
+var _depth_btns:     Dictionary = {}  # int -> Button
 
 # Debug Sidebar Modular Sub-Boxes
 var _debug_visible: bool = true
@@ -132,6 +136,7 @@ func init(manager: BattleManager) -> void:
 func _ready() -> void:
 	layer = 10
 	_build_ui()
+	_refresh_debug_config()
 	_update_positions()
 	get_viewport().size_changed.connect(_update_positions)
 	if is_instance_valid(_combat_stage) and not _combat_stage.resized.is_connected(_update_positions):
@@ -608,12 +613,17 @@ func _build_experiment_panel() -> void:
 	_exp_vbox.add_child(sep)
 
 	# Interactive AI Selection Rows
-	_exp_vbox.add_child(_make_exp_row("Algorithm [1/2/3]:", ["Minimax", "Alpha-Beta", "Expectimax"],
-		func(i: int): _manager.ai_algorithm = i; _refresh_debug_config()))
-	_exp_vbox.add_child(_make_exp_row("Evaluation [Q..T]:", ["HP Diff", "Aggressive", "Defensive", "Weighted", "HP Ratio"],
-		func(i: int): _manager.ai_eval_func = i; _refresh_debug_config()))
-	_exp_vbox.add_child(_make_exp_row("Ordering [Z..V]:", ["Default", "Aggressive", "Defensive", "Random"],
-		func(i: int): _manager.ai_action_order = i; _refresh_debug_config()))
+	_algo_btns = _make_exp_row("Algorithm [1/2/3]:", ["Minimax", "Alpha-Beta", "Expectimax"],
+		func(i: int): _manager.ai_algorithm = i; _refresh_debug_config())
+	_exp_vbox.add_child(_algo_btns[0].get_parent() as HBoxContainer)
+
+	_eval_btns = _make_exp_row("Evaluation [Q..T]:", ["HP Diff", "Aggressive", "Defensive", "Weighted", "HP Ratio"],
+		func(i: int): _manager.ai_eval_func = i; _refresh_debug_config())
+	_exp_vbox.add_child(_eval_btns[0].get_parent() as HBoxContainer)
+
+	_order_btns = _make_exp_row("Ordering [Z..V]:", ["Default", "Aggressive", "Defensive", "Random"],
+		func(i: int): _manager.ai_action_order = i; _refresh_debug_config())
+	_exp_vbox.add_child(_order_btns[0].get_parent() as HBoxContainer)
 
 	# Search Depth Selection Row
 	var depth_row := HBoxContainer.new()
@@ -646,6 +656,7 @@ func _build_experiment_panel() -> void:
 	btn_plus.pressed.connect(func(): _change_ai_depth_by(+1))
 	depth_row.add_child(btn_plus)
 
+	_depth_btns.clear()
 	for d in [1, 2, 3, 4, 5, 6]:
 		var d_val: int = d
 		var d_btn := Button.new()
@@ -654,6 +665,7 @@ func _build_experiment_panel() -> void:
 		d_btn.add_theme_font_size_override("font_size", 8)
 		d_btn.pressed.connect(func(): _set_ai_depth(d_val))
 		depth_row.add_child(d_btn)
+		_depth_btns[d_val] = d_btn
 
 	var run_row := HBoxContainer.new()
 	_exp_vbox.add_child(run_row)
@@ -1078,6 +1090,19 @@ func _refresh_debug_config() -> void:
 	if is_instance_valid(_lbl_order):
 		_lbl_order.text = order_names[_manager.ai_action_order]
 
+	# Update button outline selection in Benchmark / AI Config Lab
+	for i in range(_algo_btns.size()):
+		_style_toggle_button(_algo_btns[i], i == _manager.ai_algorithm, Color(0.0, 0.95, 0.85))
+
+	for i in range(_eval_btns.size()):
+		_style_toggle_button(_eval_btns[i], i == _manager.ai_eval_func, Color(1.0, 0.85, 0.3))
+
+	for i in range(_order_btns.size()):
+		_style_toggle_button(_order_btns[i], i == _manager.ai_action_order, Color(0.9, 0.6, 1.0))
+
+	for d_val in _depth_btns.keys():
+		_style_toggle_button(_depth_btns[d_val], d_val == _manager.ai_depth, Color(1.0, 0.9, 0.2))
+
 func _on_debug_updated(info: Dictionary) -> void:
 	_refresh_debug_config()
 
@@ -1473,12 +1498,13 @@ func _set_buttons_enabled(enabled: bool) -> void:
 		var has_potions: bool = (_manager != null and _manager.state != null and _manager.state.player_potions > 0)
 		_btn_potion.disabled = not enabled or not has_potions
 
-func _make_exp_row(label_text: String, options: Array, callback: Callable) -> HBoxContainer:
+func _make_exp_row(label_text: String, options: Array, callback: Callable) -> Array[Button]:
 	var row := HBoxContainer.new()
 	var lbl := _make_small_label(label_text)
 	lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
 	lbl.custom_minimum_size.x = 120
 	row.add_child(lbl)
+	var btns: Array[Button] = []
 	for i in range(options.size()):
 		var idx: int = i
 		var btn := Button.new()
@@ -1487,4 +1513,29 @@ func _make_exp_row(label_text: String, options: Array, callback: Callable) -> HB
 		btn.add_theme_font_size_override("font_size", 8)
 		btn.pressed.connect(func(): callback.call(idx))
 		row.add_child(btn)
-	return row
+		btns.append(btn)
+	return btns
+
+func _style_toggle_button(btn: Button, is_selected: bool, accent_color: Color = Color(1.0, 0.8, 0.2)) -> void:
+	if not is_instance_valid(btn):
+		return
+	if is_selected:
+		var sel := StyleBoxFlat.new()
+		sel.bg_color = accent_color.darkened(0.6)
+		sel.border_color = accent_color
+		sel.set_border_width_all(2)
+		sel.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal",  sel)
+		btn.add_theme_stylebox_override("hover",   sel)
+		btn.add_theme_stylebox_override("pressed", sel)
+		btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	else:
+		var unsel := StyleBoxFlat.new()
+		unsel.bg_color = Color(0.12, 0.11, 0.18, 0.85)
+		unsel.border_color = Color(0.3, 0.25, 0.45, 0.6)
+		unsel.set_border_width_all(1)
+		unsel.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal",  unsel)
+		btn.add_theme_stylebox_override("hover",   unsel)
+		btn.add_theme_stylebox_override("pressed", unsel)
+		btn.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
