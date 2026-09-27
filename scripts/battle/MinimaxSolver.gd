@@ -389,11 +389,11 @@ static func action_name(action: int) -> String:
 
 static func action_icon(action: int) -> String:
 	match action:
-		Action.ATTACK:       return "⚔️"
-		Action.HEAVY_ATTACK: return "🔥"
-		Action.DEFEND:       return "🛡️"
-		Action.POTION:       return "💊"
-		_:                   return "❓"
+		Action.ATTACK:       return "[ATK]"
+		Action.HEAVY_ATTACK: return "[HVY]"
+		Action.DEFEND:       return "[DEF]"
+		Action.POTION:       return "[POT]"
+		_:                   return "[?]"
 
 func _algo_name() -> String:
 	match algorithm:

@@ -128,7 +128,7 @@ func _on_demon_caught_player() -> void:
 	demon.is_active  = false
 	path_dot_visualizer.clear_path()
 	frontier_visualizer.set_explored_nodes([])
-	info_label.text = "⚔️  BATTLE INITIATED!"
+	info_label.text = "BATTLE INITIATED!"
 	algo_label.text = ""
 
 	# Small delay then start battle
@@ -168,10 +168,10 @@ func _on_battle_ended(winner: String, _final_state: BattleState) -> void:
 		demon.is_active  = true
 		player.is_active = true
 		_update_algo_label()
-		info_label.text = "🏆 Demon defeated! Keep running!  [R] Reset"
+		info_label.text = "Demon defeated! Keep running!  [R] Reset"
 	else:
 		# NPC wins — game over
 		is_game_over = true
 		path_dot_visualizer.clear_path()
-		info_label.text = "💀 DEFEATED IN BATTLE!  Press [R] to try again."
+		info_label.text = "DEFEATED IN BATTLE!  Press [R] to try again."
 		algo_label.text = ""

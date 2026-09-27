@@ -88,6 +88,6 @@ func clone() -> BattleState:
 # DISPLAY HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 func state_string() -> String:
-	return "P=%d(%d💊) D=%d(%d💊) t=%d/%d" % [
+	return "P=%d(%d pot) D=%d(%d pot) t=%d/%d" % [
 		player_hp, player_potions, npc_hp, npc_potions, turn_count, MAX_TURNS
 	]

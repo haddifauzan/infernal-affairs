@@ -12,6 +12,8 @@ extends CanvasLayer
 # CONSTANTS & ASSETS
 # ─────────────────────────────────────────────────────────────────────────────
 const TEX_PLAYER_PORTRAIT := "res://assets/sprites/characters/player/player_portrait.png"
+const TEX_PLAYER_AVATAR   := "res://assets/sprites/characters/player/player_avatar.png"
+const TEX_DEMON_AVATAR    := "res://assets/sprites/characters/demon/demon_avatar.png"
 const TEX_DEMON_BOSS      := "res://assets/sprites/characters/demon/demon_boss.png"
 const TEX_AURA_PLAYER     := "res://assets/sprites/ui/effects/aura_player.png"
 const TEX_AURA_DEMON      := "res://assets/sprites/ui/effects/aura_demon.png"
@@ -203,20 +205,20 @@ func _build_header_and_hp() -> void:
 	main_vbox.add_child(top_row)
 
 	var title := Label.new()
-	title.text = "⚔️  INFERNAL DUEL  •  TURN-BASED COMBAT"
+	title.text = "INFERNAL DUEL  •  TURN-BASED COMBAT"
 	title.add_theme_font_size_override("font_size", 13)
 	title.add_theme_color_override("font_color", Color(1.0, 0.45, 0.2))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_row.add_child(title)
 
 	_btn_toggle_exp = Button.new()
-	_btn_toggle_exp.text = "🧪 Benchmark Lab [P]"
+	_btn_toggle_exp.text = "Benchmark Lab [P]"
 	_btn_toggle_exp.add_theme_font_size_override("font_size", 10)
 	_btn_toggle_exp.pressed.connect(_toggle_experiment_panel)
 	top_row.add_child(_btn_toggle_exp)
 
 	_btn_toggle_dbg = Button.new()
-	_btn_toggle_dbg.text = "🔍 Debug Overlay [D]"
+	_btn_toggle_dbg.text = "Debug Overlay [D]" if _debug_visible else "Show Debug [D]"
 	_btn_toggle_dbg.add_theme_font_size_override("font_size", 10)
 	_btn_toggle_dbg.pressed.connect(_toggle_debug_sidebar)
 	top_row.add_child(_btn_toggle_dbg)
@@ -233,14 +235,21 @@ func _build_header_and_hp() -> void:
 
 	var p_hdr := HBoxContainer.new()
 	p_box.add_child(p_hdr)
+	var p_avatar := TextureRect.new()
+	p_avatar.texture = load(TEX_PLAYER_AVATAR)
+	p_avatar.custom_minimum_size = Vector2(20, 20)
+	p_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	p_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	p_hdr.add_child(p_avatar)
+
 	var p_title := Label.new()
-	p_title.text = "🛡️ PLAYER (Lost Soul Knight)"
+	p_title.text = "PLAYER (Lost Soul Knight)"
 	p_title.add_theme_font_size_override("font_size", 11)
 	p_title.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
 	p_hdr.add_child(p_title)
 
 	var p_spc := Control.new(); p_spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; p_hdr.add_child(p_spc)
-	_player_def_badge = _make_mini_badge("🛡️ DEFENDING", Color(0.1, 0.6, 1.0))
+	_player_def_badge = _make_mini_badge("DEFENDING", Color(0.1, 0.6, 1.0))
 	_player_def_badge.visible = false
 	p_hdr.add_child(_player_def_badge)
 
@@ -253,7 +262,14 @@ func _build_header_and_hp() -> void:
 	_player_hp_label.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
 	p_sub.add_child(_player_hp_label)
 	var p_sub_spc := Control.new(); p_sub_spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; p_sub.add_child(p_sub_spc)
-	_player_pot_label = _make_small_label("💊 Potions: 3/3")
+	var p_pot_icon := TextureRect.new()
+	p_pot_icon.texture = load(TEX_ICON_POTION)
+	p_pot_icon.custom_minimum_size = Vector2(16, 16)
+	p_pot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	p_pot_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	p_sub.add_child(p_pot_icon)
+
+	_player_pot_label = _make_small_label("Potions: 3/3")
 	p_sub.add_child(_player_pot_label)
 
 	# VS Badge
@@ -271,23 +287,37 @@ func _build_header_and_hp() -> void:
 
 	var d_hdr := HBoxContainer.new()
 	d_box.add_child(d_hdr)
-	_npc_def_badge = _make_mini_badge("🛡️ DEFENDING", Color(1.0, 0.3, 0.1))
+	_npc_def_badge = _make_mini_badge("DEFENDING", Color(1.0, 0.3, 0.1))
 	_npc_def_badge.visible = false
 	d_hdr.add_child(_npc_def_badge)
 
 	var d_spc := Control.new(); d_spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; d_hdr.add_child(d_spc)
 	var d_title := Label.new()
-	d_title.text = "DEMON BRUTE (Minimax AI) 👹"
+	d_title.text = "DEMON BRUTE (Minimax AI)"
 	d_title.add_theme_font_size_override("font_size", 11)
 	d_title.add_theme_color_override("font_color", Color(1.0, 0.35, 0.15))
 	d_hdr.add_child(d_title)
+
+	var d_avatar := TextureRect.new()
+	d_avatar.texture = load(TEX_DEMON_AVATAR)
+	d_avatar.custom_minimum_size = Vector2(20, 20)
+	d_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	d_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	d_hdr.add_child(d_avatar)
 
 	_npc_hp_bar = _make_hp_bar(Color(0.95, 0.25, 0.15))
 	d_box.add_child(_npc_hp_bar)
 
 	var d_sub := HBoxContainer.new()
 	d_box.add_child(d_sub)
-	_npc_pot_label = _make_small_label("💊 Potions: 3/3")
+	var d_pot_icon := TextureRect.new()
+	d_pot_icon.texture = load(TEX_ICON_POTION)
+	d_pot_icon.custom_minimum_size = Vector2(16, 16)
+	d_pot_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	d_pot_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	d_sub.add_child(d_pot_icon)
+
+	_npc_pot_label = _make_small_label("Potions: 3/3")
 	d_sub.add_child(_npc_pot_label)
 	var d_sub_spc := Control.new(); d_sub_spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; d_sub.add_child(d_sub_spc)
 	_npc_hp_label = _make_small_label("HP: 100 / 100")
@@ -347,7 +377,7 @@ func _build_combat_stage() -> void:
 	_player_shield_fx.modulate = Color(0.2, 0.8, 1.0, 0.0)
 	_player_node.add_child(_player_shield_fx)
 
-	_player_turn_badge = _make_mini_badge("👉 YOUR TURN", Color(0.0, 0.95, 0.85))
+	_player_turn_badge = _make_mini_badge("YOUR TURN", Color(0.0, 0.95, 0.85))
 	_player_turn_badge.position = Vector2(-55, -180)
 	_player_node.add_child(_player_turn_badge)
 	_player_badge_lbl = _player_turn_badge.get_child(0) as Label
@@ -373,7 +403,7 @@ func _build_combat_stage() -> void:
 	_demon_shield_fx.modulate = Color(1.0, 0.4, 0.1, 0.0)
 	_demon_node.add_child(_demon_shield_fx)
 
-	_demon_turn_badge = _make_mini_badge("⏳ THINKING...", Color(1.0, 0.4, 0.1))
+	_demon_turn_badge = _make_mini_badge("THINKING...", Color(1.0, 0.4, 0.1))
 	_demon_turn_badge.position = Vector2(-60, -205)
 	_demon_turn_badge.visible = false
 	_demon_node.add_child(_demon_turn_badge)
@@ -419,7 +449,7 @@ func _build_controls() -> void:
 	var spc := Control.new(); spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tip_row.add_child(spc)
 
 	_status_label = Label.new()
-	_status_label.text = "💡 Tip: Defend reduces incoming damage by 50%!"
+	_status_label.text = "Tip: Defend reduces incoming damage by 50%!"
 	_status_label.add_theme_font_size_override("font_size", 10)
 	_status_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.85))
 	tip_row.add_child(_status_label)
@@ -430,10 +460,10 @@ func _build_controls() -> void:
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(btn_row)
 
-	_btn_attack = _make_action_button("⚔️ [1] Attack\n[20 DMG]",        Color(0.85, 0.25, 0.1))
-	_btn_heavy  = _make_action_button("🔥 [2] Heavy\n[37 DMG, -10]",     Color(0.95, 0.15, 0.45))
-	_btn_defend = _make_action_button("🛡️ [3] Defend\n[Block 50%]",      Color(0.1, 0.55, 0.95))
-	_btn_potion = _make_action_button("💊 [4] Potion\n[+30 HP]",         Color(0.1, 0.85, 0.35))
+	_btn_attack = _make_action_button("[1] Attack\n[20 DMG]",        Color(0.85, 0.25, 0.1),  TEX_ICON_SWORD)
+	_btn_heavy  = _make_action_button("[2] Heavy\n[37 DMG, -10]",     Color(0.95, 0.15, 0.45), TEX_ICON_SWORD)
+	_btn_defend = _make_action_button("[3] Defend\n[Block 50%]",      Color(0.1, 0.55, 0.95),  TEX_ICON_SHIELD)
+	_btn_potion = _make_action_button("[4] Potion\n[+30 HP]",         Color(0.1, 0.85, 0.35),  TEX_ICON_POTION)
 
 	btn_row.add_child(_btn_attack)
 	btn_row.add_child(_btn_heavy)
@@ -447,7 +477,7 @@ func _build_controls() -> void:
 
 	# Hotkey Helper Row
 	var helper_lbl := Label.new()
-	helper_lbl.text = "⌨️ Shortcuts: [1-4] Action  |  [D] Toggle NPC Debug  |  [P] AI Config & Benchmark"
+	helper_lbl.text = "Shortcuts: [1-4] Action  |  [D] Toggle NPC Debug  |  [P] AI Config & Benchmark"
 	helper_lbl.add_theme_font_size_override("font_size", 9)
 	helper_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
 	helper_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -481,14 +511,14 @@ func _build_debug_sidebar() -> void:
 	vbox.add_child(title_row)
 
 	var sb_title := Label.new()
-	sb_title.text = "🔍 NPC MINIMAX MONITOR"
+	sb_title.text = "NPC MINIMAX MONITOR"
 	sb_title.add_theme_font_size_override("font_size", 11)
 	sb_title.add_theme_color_override("font_color", Color(0.8, 0.55, 1.0))
 	sb_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(sb_title)
 
 	var btn_close := Button.new()
-	btn_close.text = "✕"
+	btn_close.text = "X"
 	btn_close.add_theme_font_size_override("font_size", 9)
 	btn_close.custom_minimum_size = Vector2(22, 20)
 	btn_close.pressed.connect(_toggle_debug_sidebar)
@@ -505,7 +535,7 @@ func _build_debug_sidebar() -> void:
 	scroll.add_child(boxes_vbox)
 
 	# ── KOTAK 1: AI Engine & Configuration ──
-	var cfg_data := _make_subbox("⚙️  AI Engine & Search Config", Color(0.3, 0.2, 0.6))
+	var cfg_data := _make_subbox(" AI Engine & Search Config", Color(0.3, 0.2, 0.6))
 	_box_config = cfg_data["panel"] as PanelContainer
 	var cfg_vbox := cfg_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_config)
@@ -515,7 +545,7 @@ func _build_debug_sidebar() -> void:
 	_lbl_order = _make_stat_row("Action Ordering:", "Default Heuristic", Color(0.8, 0.8, 0.8), cfg_vbox)
 
 	# ── KOTAK 2: Search Performance & Tree Stats ──
-	var perf_data := _make_subbox("📊  Tree Search Performance", Color(0.15, 0.35, 0.65))
+	var perf_data := _make_subbox(" Tree Search Performance", Color(0.15, 0.35, 0.65))
 	_box_perf = perf_data["panel"] as PanelContainer
 	var perf_vbox := perf_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_perf)
@@ -531,14 +561,14 @@ func _build_debug_sidebar() -> void:
 	_lbl_max_depth  = _make_metric_card("Max Depth", "0", Color(1.0, 0.85, 0.2), grid)
 
 	# ── KOTAK 3: Evaluated Actions & Decision Scores ──
-	var act_data := _make_subbox("🎯  Candidate Action Utilities (NPC)", Color(0.65, 0.25, 0.15))
+	var act_data := _make_subbox(" Candidate Action Utilities (NPC)", Color(0.65, 0.25, 0.15))
 	_box_actions = act_data["panel"] as PanelContainer
 	_actions_vbox = act_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_actions)
 	_build_action_score_idle()
 
 	# ── KOTAK 4: Combat State Assessment ──
-	var st_data := _make_subbox("💡  Strategic State Assessment", Color(0.2, 0.45, 0.35))
+	var st_data := _make_subbox(" Strategic State Assessment", Color(0.2, 0.45, 0.35))
 	_box_state = st_data["panel"] as PanelContainer
 	var st_vbox := st_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_state)
@@ -546,7 +576,7 @@ func _build_debug_sidebar() -> void:
 	_lbl_threat    = _make_stat_row("Threat Level:", "Moderate", Color(1.0, 0.8, 0.2), st_vbox)
 
 	# ── KOTAK 5: Action History ──
-	var hist_data := _make_subbox("📜  Recent Turns Log", Color(0.25, 0.25, 0.35))
+	var hist_data := _make_subbox(" Recent Turns Log", Color(0.25, 0.25, 0.35))
 	_box_history = hist_data["panel"] as PanelContainer
 	var hist_vbox := hist_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_history)
@@ -590,20 +620,20 @@ func _build_experiment_panel() -> void:
 	_exp_vbox.add_child(hdr)
 
 	var lab_title := Label.new()
-	lab_title.text = "🧪  AI EXPERIMENT & BENCHMARK LAB"
+	lab_title.text = "AI EXPERIMENT & BENCHMARK LAB"
 	lab_title.add_theme_font_size_override("font_size", 12)
 	lab_title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
 	lab_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hdr.add_child(lab_title)
 
 	_btn_copy_exp = Button.new()
-	_btn_copy_exp.text = "📋 Copy to Clipboard"
+	_btn_copy_exp.text = "Copy to Clipboard"
 	_btn_copy_exp.add_theme_font_size_override("font_size", 9)
 	_btn_copy_exp.pressed.connect(_copy_exp_results)
 	hdr.add_child(_btn_copy_exp)
 
 	var close_btn := Button.new()
-	close_btn.text = "✕ Back to Duel [P]"
+	close_btn.text = "Back to Duel [P]"
 	close_btn.add_theme_font_size_override("font_size", 9)
 	close_btn.pressed.connect(_toggle_experiment_panel)
 	hdr.add_child(close_btn)
@@ -671,7 +701,7 @@ func _build_experiment_panel() -> void:
 	_exp_vbox.add_child(run_row)
 
 	var run_btn := Button.new()
-	run_btn.text = "⚡ Run Full Automated Benchmark (180 Headless Battles)"
+	run_btn.text = "Run Full Automated Benchmark (180 Headless Battles)"
 	run_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	run_btn.add_theme_font_size_override("font_size", 10)
 	run_btn.pressed.connect(_run_experiment)
@@ -702,7 +732,7 @@ func _build_experiment_panel() -> void:
 	_exp_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_exp_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_exp_log.add_theme_font_size_override("normal_font_size", 9)
-	_exp_log.text = "[color=#ffcc00][b]Tekan tombol [⚡ Run Full Automated Benchmark] di atas.[/b][/color]\n[color=#888]Sistem akan menjalankan simulasi headless (Minimax vs Alpha-Beta, evaluasi fungsi, ordering, dan perbandingan depth).\nHasil pengujian dapat di-scroll dengan mouse wheel dan disalin langsung via [📋 Copy to Clipboard].[/color]"
+	_exp_log.text = "[color=#ffcc00][b]Tekan tombol [Run Full Automated Benchmark] di atas.[/b][/color]\n[color=#888]Sistem akan menjalankan simulasi headless (Minimax vs Alpha-Beta, evaluasi fungsi, ordering, dan perbandingan depth).\nHasil pengujian dapat di-scroll dengan mouse wheel dan disalin langsung via [Copy to Clipboard].[/color]"
 	log_box.add_child(_exp_log)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -847,7 +877,7 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			tw.parallel().tween_property(shield_fx, "modulate:a", 1.0, 0.15)
 			tw.parallel().tween_property(shield_fx, "scale", Vector2(1.3, 1.3), 0.15)
 			tw.tween_callback(func():
-				_spawn_floating_text("🛡️ DEFENDING (Block 50%)", attacker_node.position + Vector2(0, -90), Color(0.2, 0.8, 1.0), false)
+				_spawn_floating_text(" DEFENDING (Block 50%)", attacker_node.position + Vector2(0, -90), Color(0.2, 0.8, 1.0), false)
 			)
 			tw.tween_property(attacker_node, "position", base_pos, 0.18)
 			tw.finished.connect(func():
@@ -862,7 +892,7 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			tw.tween_property(attacker_node, "position", jump_pos, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			tw.tween_property(attacker_node, "position", base_pos, 0.15).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 			tw.tween_callback(func():
-				_spawn_floating_text("+%d HP 💊" % heal, attacker_node.position + Vector2(0, -110), Color(0.2, 1.0, 0.4), false)
+				_spawn_floating_text("+%d HP " % heal, attacker_node.position + Vector2(0, -110), Color(0.2, 1.0, 0.4), false)
 				_smooth_refresh_hp(new_state)
 			)
 			tw.finished.connect(func():
@@ -889,9 +919,9 @@ func _trigger_hit_impact(def_node: Control, def_sprite: TextureRect, dmg: int, w
 	# Floating damage number
 	var spawn_pos := def_node.position + Vector2(0.0, -100.0)
 	if was_blocked:
-		_spawn_floating_text("🛡️ BLOCKED! -%d HP" % dmg, spawn_pos, Color(0.3, 0.8, 1.0), false)
+		_spawn_floating_text(" BLOCKED! -%d HP" % dmg, spawn_pos, Color(0.3, 0.8, 1.0), false)
 	elif is_crit:
-		_spawn_floating_text("🔥 -%d CRIT!" % dmg, spawn_pos, Color(1.0, 0.3, 0.2), true)
+		_spawn_floating_text(" -%d CRIT!" % dmg, spawn_pos, Color(1.0, 0.3, 0.2), true)
 	else:
 		_spawn_floating_text("-%d HP" % dmg, spawn_pos, Color(1.0, 0.8, 0.2), false)
 
@@ -956,18 +986,18 @@ func _on_turn_changed(whose_turn: String) -> void:
 			_set_buttons_enabled(true)
 			_show_player_tip()
 	else:
-		_turn_label.text = "⏳ Demon is evaluating game tree…"
+		_turn_label.text = "Demon is evaluating game tree..."
 		_turn_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.15))
 		if is_instance_valid(_player_turn_badge): _player_turn_badge.visible = false
 		if is_instance_valid(_demon_turn_badge):
 			_demon_turn_badge.visible = true
-			_demon_badge_lbl.text = "⏳ THINKING..."
+			_demon_badge_lbl.text = "THINKING..."
 		_set_buttons_enabled(false)
 
 func _on_npc_thinking(is_thinking: bool) -> void:
 	if is_thinking and is_instance_valid(_demon_turn_badge):
 		_demon_turn_badge.visible = true
-		_demon_badge_lbl.text = "⏳ CALCULATING..."
+		_demon_badge_lbl.text = "CALCULATING..."
 
 func _on_battle_started(state: BattleState) -> void:
 	_action_history.clear()
@@ -985,15 +1015,15 @@ func _on_battle_ended(winner: String, final_state: BattleState) -> void:
 	if is_instance_valid(_demon_turn_badge):  _demon_turn_badge.visible  = false
 
 	if winner == "player":
-		_turn_label.text = "🏆 VICTORY! Demon brute was vanquished!"
+		_turn_label.text = "VICTORY! Demon brute was vanquished!"
 		_turn_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
-		_spawn_floating_text("🏆 VICTORY!", _player_base_pos + Vector2(0, -120), Color(0.2, 1.0, 0.5), true)
+		_spawn_floating_text(" VICTORY!", _player_base_pos + Vector2(0, -120), Color(0.2, 1.0, 0.5), true)
 		if is_instance_valid(_demon_sprite):
 			create_tween().tween_property(_demon_sprite, "modulate:a", 0.0, 1.0)
 	else:
-		_turn_label.text = "💀 DEFEATED! The Minimax demon prevailed."
+		_turn_label.text = "DEFEATED! The Minimax demon prevailed."
 		_turn_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.2))
-		_spawn_floating_text("💀 DEFEATED!", _player_base_pos + Vector2(0, -120), Color(1.0, 0.25, 0.2), true)
+		_spawn_floating_text(" DEFEATED!", _player_base_pos + Vector2(0, -120), Color(1.0, 0.25, 0.2), true)
 		if is_instance_valid(_player_sprite):
 			create_tween().tween_property(_player_sprite, "modulate:a", 0.0, 1.0)
 
@@ -1007,8 +1037,8 @@ func _smooth_refresh_hp(state: BattleState) -> void:
 
 	_player_hp_label.text = "HP: %d / %d" % [state.player_hp, BattleState.MAX_HP]
 	_npc_hp_label.text    = "HP: %d / %d" % [state.npc_hp,    BattleState.MAX_HP]
-	_player_pot_label.text = "💊 Potions: %d/3" % state.player_potions
-	_npc_pot_label.text    = "💊 Potions: %d/3" % state.npc_potions
+	_player_pot_label.text = "Potions: %d/3" % state.player_potions
+	_npc_pot_label.text    = "Potions: %d/3" % state.npc_potions
 
 	_refresh_defending_badges(state)
 
@@ -1017,8 +1047,8 @@ func _refresh_state_data(state: BattleState) -> void:
 	_npc_hp_bar.value     = state.npc_hp
 	_player_hp_label.text = "HP: %d / %d" % [state.player_hp, BattleState.MAX_HP]
 	_npc_hp_label.text    = "HP: %d / %d" % [state.npc_hp,    BattleState.MAX_HP]
-	_player_pot_label.text = "💊 Potions: %d/3" % state.player_potions
-	_npc_pot_label.text    = "💊 Potions: %d/3" % state.npc_potions
+	_player_pot_label.text = "Potions: %d/3" % state.player_potions
+	_npc_pot_label.text    = "Potions: %d/3" % state.npc_potions
 
 	_refresh_defending_badges(state)
 	_update_strategic_assessment(state)
@@ -1039,15 +1069,15 @@ func _show_player_tip() -> void:
 	var s := _manager.state
 	var tip := ""
 	if s.player_hp <= 30 and s.player_potions > 0:
-		tip = "💊 HP kritis! Gunakan Potion sekarang."
+		tip = " HP kritis! Gunakan Potion sekarang."
 	elif s.npc_defending:
-		tip = "🔥 Demon sedang Defend! Gunakan Heavy Attack untuk menembus block."
+		tip = " Demon sedang Defend! Gunakan Heavy Attack untuk menembus block."
 	elif s.player_hp < s.npc_hp - 20:
-		tip = "🛡️ Tertinggal HP. Defend dapat menghemat HP dari Heavy Attack lawan."
+		tip = " Tertinggal HP. Defend dapat menghemat HP dari Heavy Attack lawan."
 	elif s.npc_hp <= 30:
-		tip = "⚔️ Demon hampir tumbang! Lancarkan serangan terakhir!"
+		tip = " Demon hampir tumbang! Lancarkan serangan terakhir!"
 	else:
-		tip = "⚔️ Serang terus. Manfaatkan saat Demon tidak dalam posisi Defend."
+		tip = " Serang terus. Manfaatkan saat Demon tidak dalam posisi Defend."
 	_status_label.text = tip
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1056,7 +1086,7 @@ func _show_player_tip() -> void:
 func _toggle_debug_sidebar() -> void:
 	_debug_visible = not _debug_visible
 	_debug_sidebar.visible = _debug_visible
-	_btn_toggle_dbg.text = "🔍 Debug Overlay [D]" if _debug_visible else "🔍 Show Debug [D]"
+	_btn_toggle_dbg.text = "Debug Overlay [D]" if _debug_visible else "Show Debug [D]"
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_update_positions()
@@ -1180,7 +1210,7 @@ func _render_action_scores_box(scores: Dictionary, best_name: String) -> void:
 
 		if is_best:
 			var badge := Label.new()
-			badge.text = " ★ BEST"
+			badge.text = " [BEST]"
 			badge.add_theme_font_size_override("font_size", 8)
 			badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 			row.add_child(badge)
@@ -1255,20 +1285,20 @@ func _toggle_experiment_panel() -> void:
 	if is_instance_valid(_combat_stage_panel):
 		_combat_stage_panel.visible = not _exp_visible
 	if is_instance_valid(_btn_toggle_exp):
-		_btn_toggle_exp.text = "⚔️ Back to Duel [P]" if _exp_visible else "🧪 Benchmark Lab [P]"
+		_btn_toggle_exp.text = "Back to Duel [P]" if _exp_visible else "Benchmark Lab [P]"
 	call_deferred("_update_positions")
 
 func _copy_exp_results() -> void:
 	if is_instance_valid(_exp_log) and not _exp_log.text.is_empty():
 		DisplayServer.clipboard_set(_exp_log.get_parsed_text())
 		if is_instance_valid(_btn_copy_exp):
-			_btn_copy_exp.text = "✅ Copied!"
+			_btn_copy_exp.text = "Copied!"
 			await get_tree().create_timer(1.8).timeout
 			if is_instance_valid(_btn_copy_exp):
-				_btn_copy_exp.text = "📋 Copy to Clipboard"
+				_btn_copy_exp.text = "Copy to Clipboard"
 
 func _run_experiment() -> void:
-	_exp_log.text = "[color=#ffcc00]⏳ Sedang menjalankan simulasi 180 pertarungan headless across all configs...\nHarap tunggu sebentar…[/color]"
+	_exp_log.text = "[color=#ffcc00]Sedang menjalankan simulasi 180 pertarungan headless across all configs...\nHarap tunggu sebentar...[/color]"
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var runner := ExperimentRunner.new()
@@ -1420,10 +1450,14 @@ func _make_hp_bar(color: Color) -> ProgressBar:
 	bar.add_theme_stylebox_override("background", bg)
 	return bar
 
-func _make_action_button(text: String, color: Color) -> Button:
+func _make_action_button(text: String, color: Color, icon_path: String = "") -> Button:
 	var btn := Button.new()
 	btn.text = text
-	btn.custom_minimum_size = Vector2(105, 52)
+	btn.custom_minimum_size = Vector2(115, 52)
+	if icon_path != "" and ResourceLoader.exists(icon_path):
+		btn.icon = load(icon_path)
+		btn.expand_icon = true
+		btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = color.darkened(0.4)
