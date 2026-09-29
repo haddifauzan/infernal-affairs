@@ -45,7 +45,8 @@ Setiap pihak memiliki maksimal 4 pilihan aksi di setiap gilirannya:
    - Memberikan damage dasar **20 DMG**.
    - Jika lawan sedang dalam status *Defending*, damage tereduksi sebesar 50% menjadi **10 DMG**.
 2. **`HEAVY_ATTACK` (Serangan Berat)**:
-   - Memberikan serangan kritikal sebesar **37 DMG** (menembus pertahanan lawan).
+   - Memberikan serangan kritikal dasar sebesar **37 DMG**.
+   - **Mekanisme vs Defend**: Menembus pertahanan sebagian (*partial pierce*); jika lawan dalam status *Defending*, damage hanya tereduksi 30% menjadi **25 DMG** (berbeda dengan serangan biasa yang tereduksi 50% menjadi 10 DMG).
    - Memiliki biaya resiko (*recoil self-damage*) sebesar **10 HP** pada pihak yang melancarkannya.
 3. **`DEFEND` (Kuda-kuda Bertahan)**:
    - Mengaktifkan status bertahan yang memotong 50% damage dari serangan biasa lawan pada giliran berikutnya.
@@ -141,8 +142,8 @@ $$\text{EVAL}_{\text{ratio}}(s) = \left( \frac{HP_{\text{npc}}}{\max(1, HP_{\tex
 ## 🔀 6. Optimasi Urutan Aksi (*Action / Move Ordering*)
 
 Efisiensi pemangkasan Alpha-Beta Pruning sangat bergantung pada urutan eksplorasi cabang anak (*move ordering*). Proyek ini menyediakan 4 strategi ordering:
-1. **`DEFAULT` (Heuristic Move Ordering)**:
-   - Memeriksa langkah krusial terlebih dahulu: Gunakan *Potion* jika sekarat $\rightarrow$ *Heavy Attack* jika menghasilkan *lethal blow* $\rightarrow$ *Attack* $\rightarrow$ *Defend*.
+1. **`DEFAULT` (Natural Enum Ordering)**:
+   - Urutan statis berdasarkan indeks nilai enum aksi (`ATTACK = 0` $\rightarrow$ `HEAVY_ATTACK = 1` $\rightarrow$ `DEFEND = 2` $\rightarrow$ `POTION = 3`). Pendekatan ini mengevaluasi aksi ofensif terlebih dahulu sebelum aksi defensif.
 2. **`AGGRESSIVE` (Offense-First)**:
    - Urutan: `HEAVY_ATTACK` $\rightarrow$ `ATTACK` $\rightarrow$ `DEFEND` $\rightarrow$ `POTION`.
 3. **`DEFENSIVE` (Defense-First)**:
@@ -164,7 +165,7 @@ Saat pertarungan berlangsung, game menyediakan **Modular Debug Sidebar** yang da
 │  • Algorithm: Alpha-Beta Pruning                       │
 │  • Evaluation: HP Difference (Optimal)                 │
 │  • Lookahead Depth: 3 Plies (Balanced)                 │
-│  • Action Ordering: Default Heuristic                  │
+│  • Action Ordering: Default (Enum Order)                  │
 ├────────────────────────────────────────────────────────┤
 │  Tree Search Performance                               │
 │  ┌─────────────────────────┬─────────────────────────┐ │
@@ -189,25 +190,39 @@ Saat pertarungan berlangsung, game menyediakan **Modular Debug Sidebar** yang da
 ```
 
 1. **Aksi yang Dipertimbangkan NPC & Nilai Skornya**: Menampilkan seluruh opsi aksi kandidat beserta nilai utilitas hasil kalkulasi pohon rekursif dan menandai pilihan optimal dengan label `[BEST]`.
-2. **Node Counts & Search Metrics**: Menampilkan jumlah node yang dikunjungi (*Nodes Visited*), jumlah cabang yang dipangkas (*Branches Pruned*), dan persentase efisiensi pemangkasan (*Prune Ratio*).
+2. **Node Counts & Search Metrics**: Menampilkan jumlah node yang dikunjungi (*Nodes Visited*), jumlah cabang yang dipangkas (*Branches Pruned*), dan efisiensi pemangkasan (*Prune Ratio*).
+   - **Formula Prune Ratio (HUD)**: $\text{Prune Ratio} = \frac{\text{Branches Pruned}}{\text{Nodes Visited} + \text{Branches Pruned}} \times 100\%$ (mengukur persentase cabang yang dieliminasi dari total kemungkinan percabangan internal yang dievaluasi pada giliran tersebut).
 3. **Konfigurasi Live**: Pemain dapat mengubah algoritma, fungsi evaluasi, kedalaman ($d=1 \dots 6$), dan strategi ordering secara langsung dari UI tanpa menghentikan game.
 
 ---
 
 ## 📊 8. Laboratorium Eksperimen & Analisis Hasil (*Benchmark Lab*)
 
-Game ini dilengkapi dengan **Automated Headless Benchmark Lab** terintegrasi (tekan tombol **`[P]`**). Sistem akan menjalankan simulasi 180 pertarungan tanpa input manusia (AI vs AI) untuk menguji hipotesis secara saintifik:
+Game ini dilengkapi dengan **Automated Headless Benchmark Lab** terintegrasi (dapat dibuka dengan menekan tombol **[P]**). Sistem akan menjalankan simulasi **220 pertarungan** tanpa input manusia (AI vs AI) yang terbagi ke dalam 5 modul pengujian:
+- **Eksperimen 1 (Perbandingan Algoritma)**: 3 konfigurasi $\times$ 10 pertarungan = **30 pertarungan**.
+- **Eksperimen 2 (Perbandingan Fungsi Evaluasi)**: 5 konfigurasi $\times$ 10 pertarungan = **50 pertarungan**.
+- **Eksperimen 3 (Perbandingan Urutan Aksi)**: 4 konfigurasi $\times$ 10 pertarungan = **40 pertarungan**.
+- **Eksperimen 4 (Perbandingan Kedalaman)**: 6 level depth ($d=1 \dots 6$) $\times$ 10 pertarungan = **60 pertarungan**.
+- **Eksperimen 5 (Profil Perilaku NPC)**: 4 profil evaluasi $\times$ 10 pertarungan = **40 pertarungan** (dijalankan ulang secara independen untuk mencatat distribusi frekuensi aksi).
+
+> 💡 **Metodologi Simulasi Player (Controlled Environment):** Seluruh benchmark pengujian otomatis menggunakan strategi bot Player standar `GREEDY` (`_greedy_player_action`: selalu memilih serangan biasa `ATTACK`, dan memprioritaskan pemulihan `POTION` jika HP $< 30$). Simulasi ini sengaja dibuat deterministik-reaktif tanpa input manusia, sehingga metrik performa (*Win Rate*, *Nodes Visited*, dll.) murni merefleksikan keunggulan matematis dari konfigurasi AI Demon.
 
 ### Eksperimen 1: Perbandingan Algoritma (Depth = 4, Eval = HP_DIFF)
 *Menguji penghematan komputasi antara Minimax reguler, Alpha-Beta Pruning, dan Expectimax:*
 
-| Algoritma | Win Rate (%) | Avg Nodes Visited | Avg Branches Pruned | Prune Efficiency | Keputusan Akhir |
+| Algoritma | Win Rate (%) | Avg Nodes Visited | Avg Branches Pruned | Penghematan Node (vs Minimax) | Keputusan Akhir |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Standard Minimax** | 100% | 1,811 | 0 | 0.0% | Identik (Optimal) |
+| **Standard Minimax** | 100% | 1,811 | 0 | 0.0% (*Baseline*) | Identik (Optimal) |
 | **Alpha-Beta Pruning** | 100% | 752 | 397 | **58.5% Penghematan** | Identik (Optimal) |
-| **Expectimax Search** | 100% | 1,124 | 0 | (Evaluasi Chance) | Resiko Terukur |
+| **Expectimax Search** | 100% | 1,124 | 0 | -38.0% (Evaluasi Chance) | Resiko Terukur |
 
-> **Analisis:** Alpha-Beta Pruning menghasilkan keputusan langkah yang **100% identik secara matematis** dengan Minimax reguler, namun hanya membutuhkan **~41.5% node expansion**. Ini membuktikan efektivitas pemangkasan cabang tanpa kehilangan keoptimalan solusi.
+> **Analisis & Klarifikasi Dua Metrik Pemangkasan (*Pruning Metrics*):**
+> 1. **Penghematan Komputasi Relatif terhadap Minimax (*Relative Node Reduction*)**:
+>    $$\text{Penghematan} = 1 - \frac{\text{Avg Nodes Alpha-Beta}}{\text{Avg Nodes Minimax}} = 1 - \frac{752}{1.811} \approx 58{,}5\%$$
+>    Alpha-Beta berhasil memangkas lebih dari separuh beban pencarian pohon Minimax murni sambil menghasilkan keputusan langkah yang **100% identik secara matematis**.
+> 2. **Rasio Pemangkasan Lokal Internal (*HUD Prune Ratio*)**:
+>    $$\text{Prune Ratio} = \frac{\text{Avg Branches Pruned}}{\text{Avg Nodes Visited} + \text{Avg Branches Pruned}} = \frac{397}{752 + 397} \approx 34{,}55\%$$
+>    Metrik ini (sebagaimana ditampilkan pada HUD saat duel) mengukur persentase cabang yang dieliminasi dari total kemungkinan percabangan internal yang dievaluasi Alpha-Beta.
 
 ---
 
@@ -229,7 +244,7 @@ Game ini dilengkapi dengan **Automated Headless Benchmark Lab** terintegrasi (te
 
 | Strategi Ordering | Win Rate (%) | Avg Nodes Visited | Avg Branches Pruned | Analisis Efisiensi |
 | :--- | :---: | :---: | :---: | :--- |
-| **`DEFAULT` (Heuristic)** | 100% | **752** | **397** | **Paling Efisien**: Langkah terbaik diperiksa lebih awal, memicu pruning dini. |
+| **`DEFAULT` (Enum Order)** | 100% | **752** | **397** | **Paling Efisien**: Urutan enum natural (`ATTACK` lalu `HEAVY`) mengevaluasi aksi serang terlebih dahulu, memicu $\alpha$-cutoff lebih awal. |
 | **`AGGRESSIVE`** | 100% | 894 | 312 | Cukup baik saat HP penuh, kurang efisien saat situasi menuntut pertahanan. |
 | **`DEFENSIVE`** | 100% | 1,028 | 240 | Kurang optimal karena aksi pasif diperiksa lebih awal sebelum serangan lethal. |
 | **`RANDOM`** | 100% | 1,280 | 185 | **Paling Lambat**: Urutan sub-optimal mendekati kompleksitas *worst-case*. |
