@@ -17,12 +17,12 @@ var is_active: bool = true
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var aura_sprite: Sprite2D = $AuraSprite
 
-var last_direction: Vector2i = Vector2i(0, 1) # default hadap bawah
+var last_direction: Vector2i = Vector2i(0, 1)
 
 # --- Aura Dynamic Scaling ---
-const AURA_BASE_SCALE := Vector2(0.28, 0.15)  # Ukuran sedang (Idle)
-const AURA_RUN_SCALE  := Vector2(0.18, 0.10)  # Mengecil saat lari
-const AURA_SPAWN_SCALE:= Vector2(0.55, 0.30)  # Membesar saat spawn
+const AURA_BASE_SCALE := Vector2(0.28, 0.15)
+const AURA_RUN_SCALE  := Vector2(0.18, 0.10)
+const AURA_SPAWN_SCALE:= Vector2(0.55, 0.30)
 
 var spawn_timer: float = 0.0
 var pulse_time: float = 0.0
@@ -55,7 +55,6 @@ func _setup_animations() -> void:
 	var run_tex  = load("res://assets/sprites/characters/player/player_run.png")
 
 	if idle_tex and run_tex:
-		# Row 0: Down, Row 1: Up, Row 2: Left (Right dihasilkan via flip_h dari Left)
 		var dirs_order = ["down", "up", "left"]
 		for row in range(3):
 			for col in range(4):
@@ -96,30 +95,28 @@ func set_grid_position(new_pos: Vector2i) -> void:
 		target_world_pos = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
 	position = target_world_pos
 
-	# Efek ledakan aura membesar saat spawn / reset
 	spawn_timer = 0.65
 	if aura_sprite:
 		aura_sprite.scale = AURA_SPAWN_SCALE
 		aura_sprite.modulate.a = 1.0
 
 func _physics_process(delta: float) -> void:
-	# 1. Gerakkan karakter menuju target posisi di dunia
+	# Pixel-perfect Dynamic Y-Sorting based on player feet
+	z_index = int(position.y + 12.0)
+
 	position = position.move_toward(target_world_pos, move_speed * delta)
 	var is_moving = position.distance_to(target_world_pos) > 1.5
 
-	# 2. Update animasi berdasarkan status gerak
 	if is_moving:
 		_play_anim("run", last_direction)
 	else:
 		_play_anim("idle", last_direction)
 
-	# 3. Update ukuran dinamis aura (Spawn -> Lari -> Idle)
 	_update_aura(delta, is_moving)
 
 	if not is_active:
 		return
 
-	# 4. Baca input keyboard untuk melangkah ke petak berikutnya
 	move_timer += delta
 	if move_timer < move_interval:
 		return
@@ -146,18 +143,15 @@ func _update_aura(delta: float, is_moving: bool) -> void:
 		return
 
 	if spawn_timer > 0.0:
-		# KETIKA SPAWN: Aura mekar besar lalu menyusut halus ke ukuran normal
 		spawn_timer -= delta
 		var t = clamp(1.0 - (spawn_timer / 0.65), 0.0, 1.0)
 		var cur_target = AURA_BASE_SCALE.lerp(AURA_SPAWN_SCALE, 1.0 - t)
 		aura_sprite.scale = aura_sprite.scale.lerp(cur_target, 0.20)
 		aura_sprite.modulate.a = lerp(1.0, 0.75, t)
 	elif is_moving:
-		# KETIKA BERLARI: Aura mengecil (ramping tertiup angin saat lari)
 		aura_sprite.scale = aura_sprite.scale.lerp(AURA_RUN_SCALE, 0.18)
 		aura_sprite.modulate.a = lerp(aura_sprite.modulate.a, 0.85, 0.15)
 	else:
-		# KETIKA IDLE: Ukuran sedang dengan denyut halus alami
 		pulse_time += delta * 3.5
 		var pulse = 1.0 + sin(pulse_time) * 0.05
 		var target_scale = AURA_BASE_SCALE * pulse
@@ -179,8 +173,6 @@ func _play_anim(state: String, dir: Vector2i) -> void:
 		anim_name = state + "_left"
 		anim_sprite.flip_h = false
 	elif dir.x > 0:
-		# Ke KANAN: Gunakan animasi _left yang dibalik secara horizontal (flip_h = true)
-		# Menghilangkan bug lari bolak-balik kanan-kiri
 		anim_name = state + "_left"
 		anim_sprite.flip_h = true
 

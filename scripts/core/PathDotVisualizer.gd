@@ -1,7 +1,7 @@
 class_name PathDotVisualizer
 extends Node2D
 
-# Visualisasi garis jejak AI sebagai titik-titik oranye menyala (• • • •)
+# Visualisasi garis jejak AI sebagai titik-titik oranye menyala (â€¢ â€¢ â€¢ â€¢)
 # menggunakan gambar path_dot.png yang di-stamp berulang di sepanjang jalur
 
 var dot_tex: Texture2D

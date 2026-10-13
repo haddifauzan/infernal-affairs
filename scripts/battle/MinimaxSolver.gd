@@ -1,33 +1,33 @@
 ## MinimaxSolver.gd
-## ──────────────────────────────────────────────────────────────────────────────
+## â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ## Implements three search algorithms on the BattleState game tree:
 ##
-##   1. MINIMAX      — exhaustive adversarial search
-##   2. ALPHABETA    — minimax + alpha-beta pruning (same decision, fewer nodes)
-##   3. EXPECTIMAX   — probabilistic variant (heavy attack has a miss chance)
+##   1. MINIMAX      â€” exhaustive adversarial search
+##   2. ALPHABETA    â€” minimax + alpha-beta pruning (same decision, fewer nodes)
+##   3. EXPECTIMAX   â€” probabilistic variant (heavy attack has a miss chance)
 ##
 ## Five evaluation functions allow NPC behaviour experiments.
 ## Four action orderings allow move-ordering experiments.
 ##
 ## All methods are PURE (no side effects on the input state).
-## ──────────────────────────────────────────────────────────────────────────────
+## â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class_name MinimaxSolver
 extends RefCounted
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ENUMERATIONS  (exported so BattleManager can reference them by name)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 enum Algorithm   { MINIMAX = 0, ALPHABETA = 1, EXPECTIMAX = 2 }
 enum EvalFunc    { HP_DIFF = 0, AGGRESSIVE = 1, DEFENSIVE = 2, WEIGHTED = 3, HP_RATIO = 4 }
 enum ActionOrder { DEFAULT = 0, AGGRESSIVE = 1, DEFENSIVE = 2, RANDOM = 3 }
 
-## Action IDs  (branching factor ≤ 4)
+## Action IDs  (branching factor â‰¤ 4)
 enum Action { ATTACK = 0, HEAVY_ATTACK = 1, DEFEND = 2, POTION = 3 }
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # DETERMINISTIC DAMAGE CONSTANTS (used by Minimax / Alpha-Beta)
 # Heavy attack has probabilistic variant used only by Expectimax.
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ATK_DMG:        int   = 20   ## Attack damage (deterministic midpoint)
 const HEAVY_DMG:      int   = 37   ## Heavy attack damage (deterministic midpoint of 30-45)
 const HEAVY_SELF_DMG: int   = 10   ## Heavy attack self-cost
@@ -35,27 +35,27 @@ const DEFEND_REDUCTION: float = 0.5 ## Block factor applied to attacker damage
 const POTION_HEAL:    int   = 30   ## HP restored per potion
 const HEAVY_HIT_PROB: float = 0.6  ## 60% hit in Expectimax (40% miss)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # SOLVER SETTINGS  (configured by BattleManager per experiment)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var max_depth:    int = 4
 var algorithm:    int = Algorithm.ALPHABETA
 var eval_func:    int = EvalFunc.HP_DIFF
 var action_order: int = ActionOrder.DEFAULT
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # DEBUG COUNTERS (reset each best_move() call)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var nodes_visited:  int = 0
 var nodes_pruned:   int = 0
 var max_depth_reached: int = 0
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # PUBLIC ENTRY POINT
 # Returns a Dictionary with all info the debug overlay needs:
 #   best_action, action_scores, nodes_visited, nodes_pruned,
 #   max_depth_reached, algorithm, eval_func, action_order, depth
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func best_move(state: BattleState) -> Dictionary:
 	nodes_visited    = 0
 	nodes_pruned     = 0
@@ -100,9 +100,9 @@ func best_move(state: BattleState) -> Dictionary:
 		"depth":             max_depth,
 	}
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ALGORITHM 1: MINIMAX (exhaustive)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func _minimax(state: BattleState, depth: int, is_maximising: bool) -> float:
 	nodes_visited += 1
 	max_depth_reached = max(max_depth_reached, max_depth - depth)
@@ -129,9 +129,9 @@ func _minimax(state: BattleState, depth: int, is_maximising: bool) -> float:
 			best = min(best, val)
 		return best
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ALGORITHM 2: ALPHA-BETA PRUNING
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func _alphabeta(state: BattleState, depth: int, alpha: float, beta: float, is_maximising: bool) -> float:
 	nodes_visited += 1
 	max_depth_reached = max(max_depth_reached, max_depth - depth)
@@ -151,7 +151,7 @@ func _alphabeta(state: BattleState, depth: int, alpha: float, beta: float, is_ma
 			alpha = max(alpha, value)
 			if beta <= alpha:
 				nodes_pruned += 1
-				break   ## β cut-off
+				break   ## Î² cut-off
 		return value
 	else:
 		var value := INF
@@ -161,14 +161,14 @@ func _alphabeta(state: BattleState, depth: int, alpha: float, beta: float, is_ma
 			beta = min(beta, value)
 			if beta <= alpha:
 				nodes_pruned += 1
-				break   ## α cut-off
+				break   ## Î± cut-off
 		return value
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ALGORITHM 3: EXPECTIMAX
 # Chance node: HEAVY_ATTACK becomes probabilistic (hit 60% / miss 40%)
 # All other actions remain deterministic for simplicity.
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func _expectimax(state: BattleState, depth: int, is_maximising: bool) -> float:
 	nodes_visited += 1
 	max_depth_reached = max(max_depth_reached, max_depth - depth)
@@ -181,7 +181,7 @@ func _expectimax(state: BattleState, depth: int, is_maximising: bool) -> float:
 	var actions := _order_actions(get_available_actions(state))
 
 	if is_maximising:
-		## NPC is the max player — still picks the best deterministic action
+		## NPC is the max player â€” still picks the best deterministic action
 		## (its own uncertainty is about the opponent, not itself)
 		var best := -INF
 		for act in actions:
@@ -190,7 +190,7 @@ func _expectimax(state: BattleState, depth: int, is_maximising: bool) -> float:
 			best = max(best, val)
 		return best
 	else:
-		## Player turn — we model each action as a chance node where
+		## Player turn â€” we model each action as a chance node where
 		## HEAVY_ATTACK has probability outcomes
 		var total := 0.0
 		for act in actions:
@@ -211,7 +211,7 @@ func _expectimax(state: BattleState, depth: int, is_maximising: bool) -> float:
 ## Heavy attack HIT outcome (player attacks NPC)
 func _apply_heavy_attack_hit(state: BattleState) -> BattleState:
 	var s := state.clone()
-	## It's player's turn — player uses heavy on NPC
+	## It's player's turn â€” player uses heavy on NPC
 	var dmg := HEAVY_DMG
 	if s.npc_defending:
 		dmg = int(dmg * DEFEND_REDUCTION)
@@ -233,10 +233,10 @@ func _apply_heavy_attack_miss(state: BattleState) -> BattleState:
 	s.turn_count += 1
 	return s
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ACTION LOGIC
 # apply_action: returns a NEW BattleState (immutable-style)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func apply_action(state: BattleState, action: int) -> BattleState:
 	var s          := state.clone()
 	var is_npc    := (s.turn == BattleState.Turn.NPC)
@@ -315,14 +315,14 @@ func get_available_actions(state: BattleState) -> Array[int]:
 		acts.append(Action.POTION)
 	return acts
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # EVALUATION FUNCTIONS  (heuristic for non-terminal states)
 # From NPC (maximiser) perspective.
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func _evaluate(state: BattleState) -> float:
 	match eval_func:
 		EvalFunc.AGGRESSIVE:
-			## Maximise damage dealt to player — pure aggression
+			## Maximise damage dealt to player â€” pure aggression
 			return float(BattleState.MAX_HP - state.player_hp)
 
 		EvalFunc.DEFENSIVE:
@@ -343,17 +343,17 @@ func _evaluate(state: BattleState) -> float:
 		_:  ## HP_DIFF (default)
 			return float(state.npc_hp - state.player_hp)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ACTION ORDERING  (for alpha-beta move ordering efficiency)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 func _order_actions(actions: Array[int]) -> Array[int]:
 	var result: Array[int] = actions.duplicate()
 	match action_order:
 		ActionOrder.AGGRESSIVE:
-			## Heavy first — maximise early damage pressure
+			## Heavy first â€” maximise early damage pressure
 			result.sort_custom(func(a, b): return _order_aggressive(a, b))
 		ActionOrder.DEFENSIVE:
-			## Defend/Potion first — survivability priority
+			## Defend/Potion first â€” survivability priority
 			result.sort_custom(func(a, b): return _order_defensive(a, b))
 		ActionOrder.RANDOM:
 			_shuffle(result)
@@ -376,9 +376,9 @@ func _shuffle(arr: Array) -> void:
 		arr[i] = arr[j]
 		arr[j] = tmp
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # DISPLAY HELPERS (static so BattleHUD can call without an instance)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 static func action_name(action: int) -> String:
 	match action:
 		Action.ATTACK:       return "Attack"

@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://cguardscene001"]
+
+[ext_resource type="Script" path="res://scripts/entities/Guard.gd" id="1_guard"]
+
+[node name="Guard" type="Node2D"]
+script = ExtResource("1_guard")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+z_index = 5
+
+[node name="AuraSprite" type="Sprite2D" parent="."]
+z_index = 4

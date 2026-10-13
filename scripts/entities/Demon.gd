@@ -10,17 +10,22 @@ signal path_updated(result: Dictionary)
 var player: PlayerEntity
 var grid_manager: GridManager
 
-var grid_pos: Vector2i = Vector2i(22, 15)
+var grid_pos: Vector2i = Vector2i(21, 4)
 var target_world_pos: Vector2 = Vector2.ZERO
-var chase_interval: float = 0.28
+var chase_interval: float = 0.35
 var chase_timer: float = 0.0
-var move_speed: float = 220.0
+var move_speed: float = 210.0
 var is_active: bool = true
 
 var current_algorithm: String = "astar"
 var astar_solver: AStarSearch = AStarSearch.new()
-var ucs_solver: UCSSearch = UCSSearch.new()
+var ucs_solver: UCSSearch     = UCSSearch.new()
 var latest_path_result: Dictionary = {}
+
+# Patrol around throne when player is unreachable (e.g. gate closed)
+var throne_origin: Vector2i = Vector2i(21, 4)
+var patrol_timer: float = 0.0
+var patrol_interval: float = 2.5
 
 # --- Sprite & Aura ---
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
@@ -29,9 +34,9 @@ var latest_path_result: Dictionary = {}
 var last_dir: Vector2i = Vector2i(0, 1)
 
 # --- Aura Dynamic Scaling ---
-const AURA_BASE_SCALE := Vector2(0.32, 0.18)  # Sedang saat idle
-const AURA_RUN_SCALE  := Vector2(0.22, 0.12)  # Mengecil saat lari
-const AURA_SPAWN_SCALE:= Vector2(0.62, 0.34)  # Membesar saat spawn
+const AURA_BASE_SCALE := Vector2(0.32, 0.18)
+const AURA_RUN_SCALE  := Vector2(0.22, 0.12)
+const AURA_SPAWN_SCALE:= Vector2(0.62, 0.34)
 
 var spawn_timer: float = 0.0
 var pulse_time: float = 0.0
@@ -105,13 +110,13 @@ func _slice_texture(tex: Texture2D, col: int, row: int, total_cols: int, total_r
 
 func set_grid_position(new_pos: Vector2i) -> void:
 	grid_pos = new_pos
+	throne_origin = new_pos
 	if grid_manager:
 		target_world_pos = grid_manager.grid_to_world(grid_pos)
 	else:
 		target_world_pos = Vector2(grid_pos.x * 32 + 16, grid_pos.y * 32 + 16)
 	position = target_world_pos
 
-	# Ledakan aura merah membesar saat spawn
 	spawn_timer = 0.65
 	if aura_sprite:
 		aura_sprite.scale = AURA_SPAWN_SCALE
@@ -124,11 +129,13 @@ func set_algorithm(algo: String) -> void:
 func recalculate_path() -> Dictionary:
 	if not grid_manager or not player:
 		return {}
+
 	var result: Dictionary = {}
 	if current_algorithm == "ucs":
 		result = ucs_solver.search(grid_manager, grid_pos, player.grid_pos)
 	else:
 		result = astar_solver.search(grid_manager, grid_pos, player.grid_pos)
+
 	latest_path_result = result
 	path_updated.emit(result)
 	return result
@@ -138,17 +145,17 @@ func _on_player_moved(_new_player_pos: Vector2i) -> void:
 		recalculate_path()
 
 func _physics_process(delta: float) -> void:
-	# 1. Gerakkan Demon menuju target
+	# Pixel-perfect Dynamic Y-Sorting based on demon feet
+	z_index = int(position.y + 14.0)
+
 	position = position.move_toward(target_world_pos, move_speed * delta)
 	var is_moving = position.distance_to(target_world_pos) > 1.5
 
-	# 2. Update animasi
 	if is_moving:
 		_play_anim("run", last_dir)
 	else:
 		_play_anim("idle", last_dir)
 
-	# 3. Update aura dinamis (Spawn -> Run -> Idle)
 	_update_aura(delta, is_moving)
 
 	if not is_active or not player:
@@ -159,14 +166,16 @@ func _physics_process(delta: float) -> void:
 		caught_player.emit()
 		return
 
-	# 4. Timer pencarian jalur AI
+	# AI Pathfinding & Movement Tick
 	chase_timer += delta
 	if chase_timer >= chase_interval:
 		chase_timer = 0.0
 		var result = recalculate_path()
-		var path: Array[Vector2i] = result.get("path", [])
+		var path = result.get("path", [])
+
 		if path.size() > 1:
-			var next_step = path[1]
+			# Player is reachable! Take next step along calculated path
+			var next_step: Vector2i = path[1]
 			last_dir = next_step - grid_pos
 			grid_pos = next_step
 			if grid_manager:
@@ -174,6 +183,31 @@ func _physics_process(delta: float) -> void:
 			if grid_pos == player.grid_pos:
 				is_active = false
 				caught_player.emit()
+		else:
+			# Player is unreachable (gate closed). Idle patrol around throne room
+			patrol_timer += chase_interval
+			if patrol_timer >= patrol_interval:
+				patrol_timer = 0.0
+				_idle_patrol_step()
+
+func _idle_patrol_step() -> void:
+	if not grid_manager:
+		return
+	var candidates: Array[Vector2i] = []
+	for dy in [-1, 0, 1]:
+		for dx in [-2, -1, 0, 1, 2]:
+			var check_pos = throne_origin + Vector2i(dx, dy)
+			if grid_manager.is_valid(check_pos.x, check_pos.y) and check_pos.y <= GridManager.CASTLE_Y_MAX:
+				candidates.append(check_pos)
+	if candidates.size() > 0:
+		var dest = candidates[randi() % candidates.size()]
+		var res = astar_solver.search(grid_manager, grid_pos, dest)
+		var p = res.get("path", [])
+		if p.size() > 1:
+			var step: Vector2i = p[1]
+			last_dir = step - grid_pos
+			grid_pos = step
+			target_world_pos = grid_manager.grid_to_world(grid_pos)
 
 func _update_aura(delta: float, is_moving: bool) -> void:
 	if not aura_sprite:
@@ -190,7 +224,7 @@ func _update_aura(delta: float, is_moving: bool) -> void:
 		aura_sprite.modulate.a = lerp(aura_sprite.modulate.a, 0.9, 0.15)
 	else:
 		pulse_time += delta * 3.5
-		var pulse = 1.0 + sin(pulse_time) * 0.05
+		var pulse = 1.0 + sin(pulse_time) * 0.06
 		var target_scale = AURA_BASE_SCALE * pulse
 		aura_sprite.scale = aura_sprite.scale.lerp(target_scale, 0.12)
 		aura_sprite.modulate.a = lerp(aura_sprite.modulate.a, 0.75, 0.10)
