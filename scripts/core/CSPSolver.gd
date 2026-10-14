@@ -9,51 +9,122 @@ extends RefCounted
 ## - Least Constraining Value (LCV) ordering
 ## - AC-3 (Arc Consistency) constraint propagation
 
-const GUARD_TYPES: Array[String] = ["Hell Knight", "Fire Shaman", "Gargoyle"]
-const BOSS_WEAPONS: Array[String] = ["Flame Sword", "Cursed Scythe", "Dark Trident"]
+# --- Domain Constants ---
+const GUARD_TYPES: Array[String] = ["Infernal Knight", "Abyssal Shaman", "Obsidian Gargoyle"]
+const GATE_SEALS: Array[String] = ["Seal of Flame", "Seal of Shadow", "Seal of Blood"]
+const GUARD_STRATEGIES: Array[String] = ["Aggressive", "Defensive", "Tactical"]
+const BOSS_WEAPONS: Array[String] = ["Flame Scythe", "Cursed Blade", "Blood Trident"]
+const BOSS_STRATEGIES: Array[String] = ["Aggressive", "Defensive", "Tactical"]
 const GATE_REQS: Array[int] = [2, 3]
 const CASTLE_POTIONS: Array[int] = [2, 3, 4]
 
-# Elemental mapping for diversity constraint: Element(Guard) != Element(BossWeapon)
+# --- Element & Affinity Mappings ---
 const GUARD_ELEMENTS: Dictionary = {
-	"Hell Knight": "Fire",
-	"Fire Shaman": "Fire",
-	"Gargoyle": "Dark"
+	"Infernal Knight": "Fire",
+	"Abyssal Shaman": "Dark",
+	"Obsidian Gargoyle": "Earth"
 }
 
 const WEAPON_ELEMENTS: Dictionary = {
-	"Flame Sword": "Fire",
-	"Cursed Scythe": "Dark",
-	"Dark Trident": "Water"
+	"Flame Scythe": "Fire",
+	"Cursed Blade": "Dark",
+	"Blood Trident": "Blood"
 }
 
-# Metrics recorded during search
+const SEAL_ELEMENTS: Dictionary = {
+	"Seal of Flame": "Fire",
+	"Seal of Shadow": "Dark",
+	"Seal of Blood": "Blood"
+}
+
+# --- Mechanics Effects Descriptions ---
+const SEAL_EFFECTS: Dictionary = {
+	"Seal of Flame": "Medan Panas: Pemain terkena 3 damage api tak langsung per ronde.",
+	"Seal of Shadow": "Hisap Jiwa: Serangan Penjaga menyerap 15% damage menjadi HP.",
+	"Seal of Blood": "Kulit Iblis: Seluruh damage fisik yang diterima Penjaga berkurang flat 4 poin."
+}
+
+const WEAPON_EFFECTS: Dictionary = {
+	"Flame Scythe": "Infernal Burn: Serangan Heavy Bos memberi efek Burn DoT 5 HP/ronde selama 2 ronde.",
+	"Cursed Blade": "Soul Drain: Serangan Bos menyerap 20% damage menjadi penyembuhan HP Bos.",
+	"Blood Trident": "Armor Pierce: Serangan Bos menembus pertahanan, aksi Defend pemain hanya efektif 20%."
+}
+
+# --- Minimax Enum Mapping Helpers ---
+# EvalFunc { HP_DIFF = 0, AGGRESSIVE = 1, DEFENSIVE = 2, WEIGHTED = 3, HP_RATIO = 4 }
+# ActionOrder { DEFAULT = 0, AGGRESSIVE = 1, DEFENSIVE = 2, RANDOM = 3 }
+const STRATEGY_MINIMAX_CONFIG: Dictionary = {
+	"Aggressive": {
+		"eval_func": 1,        # EvalFunc.AGGRESSIVE
+		"action_order": 1,     # ActionOrder.AGGRESSIVE
+		"desc": "Prioritas Heavy Attack & memaksimalkan selisih HP lawan."
+	},
+	"Defensive": {
+		"eval_func": 2,        # EvalFunc.DEFENSIVE
+		"action_order": 2,     # ActionOrder.DEFENSIVE
+		"desc": "Prioritas Defend/Potion & mempertahankan kelangsungan hidup diri."
+	},
+	"Tactical": {
+		"eval_func": 3,        # EvalFunc.WEIGHTED
+		"action_order": 0,     # ActionOrder.DEFAULT
+		"desc": "Kalkulasi seimbang antara selisih HP, stok potion, dan status bertahan."
+	}
+}
+
+# --- C1: Affinity (guard_type <-> gate_seal) ---
+const GUARD_SEAL_AFFINITY: Dictionary = {
+	"Infernal Knight": ["Seal of Flame", "Seal of Blood"],
+	"Abyssal Shaman": ["Seal of Shadow", "Seal of Blood"],
+	"Obsidian Gargoyle": ["Seal of Flame", "Seal of Shadow"]
+}
+
+# --- C2: Doctrine Compatibility (guard_type <-> guard_strategy) ---
+const GUARD_STRATEGY_COMPAT: Dictionary = {
+	"Infernal Knight": ["Aggressive", "Tactical"],
+	"Abyssal Shaman": ["Tactical", "Defensive"],
+	"Obsidian Gargoyle": ["Defensive", "Tactical"]
+}
+
+# --- C3: Elemental Resonance (gate_seal <-> boss_weapon) ---
+const SEAL_WEAPON_RESONANCE: Dictionary = {
+	"Seal of Flame": "Flame Scythe",
+	"Seal of Shadow": "Cursed Blade",
+	"Seal of Blood": "Blood Trident"
+}
+
+# --- Metrics recorded during search ---
 var assignments_count: int = 0
 var consistency_checks: int = 0
 var backtracks_count: int = 0
 var search_time_ms: float = 0.0
 
 # Constraint graph adjacency for Degree Heuristic & AC-3
-# guard_type and boss_weapon share a binary constraint (diversity)
-# castle_potions affects global potion allocation
+# Cyclic network: guard_type <-> gate_seal <-> boss_weapon <-> guard_type
+# Branch network: guard_type <-> guard_strategy <-> boss_strategy
 const NEIGHBORS: Dictionary = {
-	"guard_type": ["boss_weapon"],
-	"boss_weapon": ["guard_type"],
+	"guard_type": ["gate_seal", "guard_strategy", "boss_weapon"],
+	"gate_seal": ["guard_type", "boss_weapon"],
+	"boss_weapon": ["gate_seal", "guard_type"],
+	"guard_strategy": ["guard_type", "boss_strategy"],
+	"boss_strategy": ["guard_strategy"],
 	"gate_req": [],
 	"castle_potions": []
 }
 
-## Initial domain definition
+## Initial domain definition for all 7 variables
 func get_initial_domains() -> Dictionary:
 	return {
 		"guard_type": GUARD_TYPES.duplicate(),
+		"gate_seal": GATE_SEALS.duplicate(),
+		"guard_strategy": GUARD_STRATEGIES.duplicate(),
 		"boss_weapon": BOSS_WEAPONS.duplicate(),
+		"boss_strategy": BOSS_STRATEGIES.duplicate(),
 		"gate_req": GATE_REQS.duplicate(),
 		"castle_potions": CASTLE_POTIONS.duplicate()
 	}
 
 ## Solves the CSP using Backtracking Search with MRV, Degree Heuristic, LCV, and AC-3.
-## Returns a Dictionary containing the solution and search metrics.
+## Returns a Dictionary containing the complete assignment and search metrics.
 func solve(use_mrv: bool = true, use_lcv: bool = true, use_ac3: bool = true, randomize: bool = true, overrides: Dictionary = {}) -> Dictionary:
 	var start_time: int = Time.get_ticks_usec()
 	assignments_count = 0
@@ -62,12 +133,12 @@ func solve(use_mrv: bool = true, use_lcv: bool = true, use_ac3: bool = true, ran
 
 	var domains: Dictionary = get_initial_domains()
 
-	# Apply overrides if specified (e.g. {"guard_type": "Fire Shaman"})
+	# Apply overrides if specified (e.g. {"guard_type": "Abyssal Shaman"})
 	for key in overrides:
 		if domains.has(key):
 			domains[key] = [overrides[key]]
 
-	# Randomize domain order for variation between playthroughs
+	# Randomize domain order for diverse playthroughs
 	if randomize:
 		for k in domains:
 			if not overrides.has(k):
@@ -86,26 +157,50 @@ func solve(use_mrv: bool = true, use_lcv: bool = true, use_ac3: bool = true, ran
 
 	search_time_ms = (Time.get_ticks_usec() - start_time) / 1000.0
 
-	var guard_type: String = assignment.get("guard_type", "Hell Knight")
-	var boss_weapon: String = assignment.get("boss_weapon", "Cursed Scythe")
+	# Extract solved variables with fallbacks
+	var guard_type: String = assignment.get("guard_type", "Infernal Knight")
+	var gate_seal: String = assignment.get("gate_seal", "Seal of Flame")
+	var guard_strategy: String = assignment.get("guard_strategy", "Aggressive")
+	var boss_weapon: String = assignment.get("boss_weapon", "Blood Trident")
+	var boss_strategy: String = assignment.get("boss_strategy", "Tactical")
 	var gate_req: int = assignment.get("gate_req", 2)
 	var castle_potions: int = assignment.get("castle_potions", 3)
 
-	# Allocate potions based on global constraint: Potion_Guard + Potion_Boss <= castle_potions
+	# Potion allocation from global constraint: Potion_Guard + Potion_Boss <= castle_potions
 	var guard_potions: int = 1
 	var boss_potions: int = maxi(1, castle_potions - guard_potions)
+
+	var g_cfg: Dictionary = STRATEGY_MINIMAX_CONFIG.get(guard_strategy, STRATEGY_MINIMAX_CONFIG["Aggressive"])
+	var b_cfg: Dictionary = STRATEGY_MINIMAX_CONFIG.get(boss_strategy, STRATEGY_MINIMAX_CONFIG["Tactical"])
 
 	return {
 		"success": success,
 		"assignment": assignment,
+		# Guard specs
 		"guard_type": guard_type,
 		"guard_element": GUARD_ELEMENTS.get(guard_type, "Fire"),
+		"guard_strategy": guard_strategy,
+		"guard_eval_func": g_cfg.get("eval_func", 1),
+		"guard_action_order": g_cfg.get("action_order", 1),
+		"guard_strategy_desc": g_cfg.get("desc", ""),
+		# Gate Seal specs
+		"gate_seal": gate_seal,
+		"gate_seal_element": SEAL_ELEMENTS.get(gate_seal, "Fire"),
+		"gate_seal_effect": SEAL_EFFECTS.get(gate_seal, ""),
+		# Boss specs
 		"boss_weapon": boss_weapon,
-		"boss_element": WEAPON_ELEMENTS.get(boss_weapon, "Dark"),
+		"boss_element": WEAPON_ELEMENTS.get(boss_weapon, "Blood"),
+		"boss_weapon_effect": WEAPON_EFFECTS.get(boss_weapon, ""),
+		"boss_strategy": boss_strategy,
+		"boss_eval_func": b_cfg.get("eval_func", 3),
+		"boss_action_order": b_cfg.get("action_order", 0),
+		"boss_strategy_desc": b_cfg.get("desc", ""),
+		# Level & Logistics
 		"gate_req": gate_req,
 		"castle_potions": castle_potions,
 		"guard_potions": guard_potions,
 		"boss_potions": boss_potions,
+		# Performance Metrics
 		"assignments_count": assignments_count,
 		"consistency_checks": consistency_checks,
 		"backtracks_count": backtracks_count,
@@ -136,7 +231,6 @@ func _apply_unary_constraints(domains: Dictionary) -> void:
 ## AC-3 (Arc Consistency) Algorithm
 func _ac3(domains: Dictionary) -> bool:
 	var queue: Array = []
-	# Initialize queue with all directed arcs between constrained variables
 	for xi in NEIGHBORS:
 		for xj in NEIGHBORS[xi]:
 			queue.append([xi, xj])
@@ -175,18 +269,49 @@ func _revise(domains: Dictionary, xi: String, xj: String) -> bool:
 
 	return revised
 
-## Binary constraint check: Element(guard) != Element(boss_weapon)
+## Binary constraint checks for all 5 relational rules:
+## C1: Affinity (guard_type <-> gate_seal)
+## C2: Doctrine Compatibility (guard_type <-> guard_strategy)
+## C3: Resonance (gate_seal <-> boss_weapon)
+## C4: Diversity (guard_strategy <-> boss_strategy)
+## C5: Element Anti-Monopoly (guard_type <-> boss_weapon)
 func _is_binary_consistent(var1: String, val1, var2: String, val2) -> bool:
-	if (var1 == "guard_type" and var2 == "boss_weapon"):
+	# C1: Affinity (guard_type <-> gate_seal)
+	if var1 == "guard_type" and var2 == "gate_seal":
+		return val2 in GUARD_SEAL_AFFINITY.get(val1, [])
+	elif var1 == "gate_seal" and var2 == "guard_type":
+		return val1 in GUARD_SEAL_AFFINITY.get(val2, [])
+
+	# C2: Doctrine Compatibility (guard_type <-> guard_strategy)
+	if var1 == "guard_type" and var2 == "guard_strategy":
+		return val2 in GUARD_STRATEGY_COMPAT.get(val1, [])
+	elif var1 == "guard_strategy" and var2 == "guard_type":
+		return val1 in GUARD_STRATEGY_COMPAT.get(val2, [])
+
+	# C3: Resonance (gate_seal <-> boss_weapon)
+	if var1 == "gate_seal" and var2 == "boss_weapon":
+		return SEAL_WEAPON_RESONANCE.get(val1, "") == str(val2)
+	elif var1 == "boss_weapon" and var2 == "gate_seal":
+		return SEAL_WEAPON_RESONANCE.get(val2, "") == str(val1)
+
+	# C4: Strategy Diversity (guard_strategy <-> boss_strategy)
+	if var1 == "guard_strategy" and var2 == "boss_strategy":
+		return str(val1) != str(val2)
+	elif var1 == "boss_strategy" and var2 == "guard_strategy":
+		return str(val1) != str(val2)
+
+	# C5: Element Anti-Monopoly (guard_type <-> boss_weapon)
+	if var1 == "guard_type" and var2 == "boss_weapon":
 		return GUARD_ELEMENTS.get(val1, "") != WEAPON_ELEMENTS.get(val2, "")
-	elif (var1 == "boss_weapon" and var2 == "guard_type"):
+	elif var1 == "boss_weapon" and var2 == "guard_type":
 		return WEAPON_ELEMENTS.get(val1, "") != GUARD_ELEMENTS.get(val2, "")
+
 	return true
 
 ## Recursive Backtracking Search
 func _backtrack(assignment: Dictionary, domains: Dictionary, use_mrv: bool, use_lcv: bool, use_ac3: bool) -> bool:
-	# Complete assignment test
-	if assignment.size() == 4:
+	# Complete assignment test (7 variables)
+	if assignment.size() == 7:
 		return _is_globally_consistent(assignment)
 
 	var var_name: String = _select_unassigned_variable(assignment, domains, use_mrv)
@@ -219,12 +344,16 @@ func _backtrack(assignment: Dictionary, domains: Dictionary, use_mrv: bool, use_
 
 ## MRV Heuristic with Degree Heuristic tie-breaker
 func _select_unassigned_variable(assignment: Dictionary, domains: Dictionary, use_mrv: bool) -> String:
+	var all_vars: Array[String] = [
+		"guard_type", "gate_seal", "guard_strategy",
+		"boss_weapon", "boss_strategy", "gate_req", "castle_potions"
+	]
 	var unassigned: Array[String] = []
-	for v in ["guard_type", "boss_weapon", "gate_req", "castle_potions"]:
+	for v in all_vars:
 		if not assignment.has(v):
 			unassigned.append(v)
 
-	if not use_mrv:
+	if not use_mrv or unassigned.size() <= 1:
 		return unassigned[0]
 
 	# Find variable with Minimum Remaining Values

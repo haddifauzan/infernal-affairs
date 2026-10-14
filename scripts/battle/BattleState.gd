@@ -60,6 +60,14 @@ var minimax_depth:     int = 3
 var enemy_type:        String = "demon"
 var enemy_name:        String = "Demon Brute"
 
+# --- CSP-driven Battle Modifiers & Passive Effects ---
+var gate_seal:          String = ""
+var boss_weapon:        String = ""
+var enemy_strategy:     String = ""
+var gate_seal_effect:   String = ""
+var boss_weapon_effect: String = ""
+var player_burn_turns:  int = 0
+
 # -----------------------------------------------------------------------------
 # TERMINAL TEST
 # -----------------------------------------------------------------------------
@@ -115,6 +123,13 @@ func clone() -> BattleState:
 
 	s.enemy_type        = enemy_type
 	s.enemy_name        = enemy_name
+
+	s.gate_seal          = gate_seal
+	s.boss_weapon        = boss_weapon
+	s.enemy_strategy     = enemy_strategy
+	s.gate_seal_effect   = gate_seal_effect
+	s.boss_weapon_effect = boss_weapon_effect
+	s.player_burn_turns  = player_burn_turns
 	return s
 
 # -----------------------------------------------------------------------------

@@ -47,6 +47,7 @@ var _npc_pot_label:   Label
 var _player_def_badge: PanelContainer
 var _npc_def_badge:   PanelContainer
 var _npc_title_label: Label
+var _npc_doctrine_label: Label
 var _npc_avatar_rect: TextureRect
 var _btn_return:      Button
 
@@ -300,12 +301,25 @@ func _build_header_and_hp() -> void:
 	d_hdr.add_child(_npc_def_badge)
 
 	var d_spc := Control.new(); d_spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; d_hdr.add_child(d_spc)
+	var d_title_vbox := VBoxContainer.new()
+	d_title_vbox.add_theme_constant_override("separation", 1)
+	d_hdr.add_child(d_title_vbox)
+
 	var d_title := Label.new()
 	d_title.text = "DEMON BRUTE (Minimax AI)"
 	d_title.add_theme_font_size_override("font_size", 11)
 	d_title.add_theme_color_override("font_color", Color(1.0, 0.35, 0.15))
-	d_hdr.add_child(d_title)
+	d_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	d_title_vbox.add_child(d_title)
 	_npc_title_label = d_title
+
+	_npc_doctrine_label = Label.new()
+	_npc_doctrine_label.text = ""
+	_npc_doctrine_label.add_theme_font_size_override("font_size", 9)
+	_npc_doctrine_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
+	_npc_doctrine_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_npc_doctrine_label.visible = false
+	d_title_vbox.add_child(_npc_doctrine_label)
 
 	var d_avatar := TextureRect.new()
 	d_avatar.texture = load(TEX_DEMON_AVATAR)
@@ -1015,7 +1029,18 @@ func _on_battle_started(state: BattleState) -> void:
 
 	# Dynamically configure enemy visuals and names
 	if is_instance_valid(_npc_title_label):
-		_npc_title_label.text = "%s (Minimax Depth %d)" % [state.enemy_name, state.minimax_depth]
+		_npc_title_label.text = "%s (Depth %d)" % [state.enemy_name, state.minimax_depth]
+
+	if is_instance_valid(_npc_doctrine_label):
+		var doc_parts: Array[String] = []
+		if state.enemy_strategy.length() > 0:
+			doc_parts.append("Doktrin: %s" % state.enemy_strategy.to_upper())
+		if state.enemy_type == "guard" and state.gate_seal.length() > 0:
+			doc_parts.append("Segel: %s" % state.gate_seal)
+		elif state.enemy_type == "boss" and state.boss_weapon.length() > 0:
+			doc_parts.append("Senjata: %s" % state.boss_weapon)
+		_npc_doctrine_label.text = " | ".join(doc_parts)
+		_npc_doctrine_label.visible = doc_parts.size() > 0
 
 	if is_instance_valid(_npc_avatar_rect):
 		var av_path: String = TEX_DEMON_AVATAR
@@ -1138,10 +1163,18 @@ func _show_player_tip() -> void:
 		return
 	var s := _manager.state
 	var tip := ""
-	if s.player_hp <= 30 and s.player_potions > 0:
+	if s.player_burn_turns > 0:
+		tip = " Terkena Burn DoT (%d turn tersisa)! Selesaikan duel secepatnya!" % s.player_burn_turns
+	elif s.player_hp <= 30 and s.player_potions > 0:
 		tip = " HP kritis! Gunakan Potion sekarang."
+	elif s.npc_defending and s.enemy_strategy == "Defensive":
+		tip = " Musuh Defensive sedang menangkis! Pakai giliran ini untuk Potion atau Heavy Attack."
 	elif s.npc_defending:
 		tip = " Demon sedang Defend! Gunakan Heavy Attack untuk menembus block."
+	elif s.enemy_strategy == "Aggressive" and not s.player_defending:
+		tip = " Musuh AGGRESSIVE! Pasang DEFEND untuk menangkis Heavy Attack dan memotong HP-nya!"
+	elif s.boss_weapon == "Blood Trident":
+		tip = " Peringatan: Blood Trident menembus Defend! Prioritaskan menyerang lebih agresif."
 	elif s.player_hp < s.npc_hp - 20:
 		tip = " Tertinggal HP. Defend dapat menghemat HP dari Heavy Attack lawan."
 	elif s.npc_hp <= 30:

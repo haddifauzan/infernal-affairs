@@ -267,10 +267,25 @@ func apply_action(state: BattleState, action: int) -> BattleState:
 			var base_dmg := s.npc_atk_dmg if is_npc else s.player_atk_dmg
 			var dmg := base_dmg
 			if def_defending:
-				dmg = int(dmg * DEFEND_REDUCTION)
+				if is_npc and s.boss_weapon == "Blood Trident":
+					# Armor pierce: defend only blocks 20%
+					dmg = int(dmg * 0.8)
+				else:
+					dmg = int(dmg * DEFEND_REDUCTION)
+
+			# Gate Seal: Seal of Blood gives Guard flat 4 damage reduction against player attacks
+			if not is_npc and s.enemy_type == "guard" and s.gate_seal == "Seal of Blood":
+				dmg = max(1, dmg - 4)
+
 			if is_npc:
 				s.player_hp = max(0, s.player_hp - dmg)
 				s.player_defending = false
+
+				# Weapon / Seal Lifesteal effects
+				if s.boss_weapon == "Cursed Blade":
+					s.npc_hp = min(s.npc_max_hp, s.npc_hp + int(dmg * 0.20))
+				elif s.enemy_type == "guard" and s.gate_seal == "Seal of Shadow":
+					s.npc_hp = min(s.npc_max_hp, s.npc_hp + int(dmg * 0.15))
 			else:
 				s.npc_hp = max(0, s.npc_hp - dmg)
 				s.npc_defending = false
@@ -279,12 +294,24 @@ func apply_action(state: BattleState, action: int) -> BattleState:
 			var base_heavy := s.npc_heavy_dmg if is_npc else s.player_heavy_dmg
 			var dmg := base_heavy
 			if def_defending:
-				## Defend does NOT fully block heavy (flavour rule: only 30% reduction)
-				dmg = int(base_heavy * 0.7)
+				## Defend does NOT fully block heavy
+				if is_npc and s.boss_weapon == "Blood Trident":
+					dmg = int(base_heavy * 0.9)
+				else:
+					dmg = int(base_heavy * 0.7)
+
+			# Gate Seal: Seal of Blood gives Guard flat 4 damage reduction against player attacks
+			if not is_npc and s.enemy_type == "guard" and s.gate_seal == "Seal of Blood":
+				dmg = max(1, dmg - 4)
+
 			if is_npc:
 				s.player_hp = max(0, s.player_hp - dmg)
 				s.npc_hp    = max(0, s.npc_hp    - HEAVY_SELF_DMG)
 				s.player_defending = false
+
+				# Flame Scythe inflicts Infernal Burn (DoT)
+				if s.boss_weapon == "Flame Scythe":
+					s.player_burn_turns = 2
 			else:
 				s.npc_hp    = max(0, s.npc_hp    - dmg)
 				s.player_hp = max(0, s.player_hp - HEAVY_SELF_DMG)
@@ -303,6 +330,14 @@ func apply_action(state: BattleState, action: int) -> BattleState:
 			else:
 				s.player_hp      = min(s.player_max_hp, s.player_hp + s.player_potion_heal)
 				s.player_potions = max(0, s.player_potions - 1)
+
+	# Turn end environmental / status effect (Seal of Flame or Burn DoT)
+	if s.enemy_type == "guard" and s.gate_seal == "Seal of Flame":
+		s.player_hp = max(0, s.player_hp - 3)
+
+	if s.player_burn_turns > 0:
+		s.player_hp = max(0, s.player_hp - 5)
+		s.player_burn_turns -= 1
 
 	## Advance turn
 	s.turn = BattleState.Turn.PLAYER if is_npc else BattleState.Turn.NPC

@@ -18,6 +18,16 @@ var player_stats: Dictionary = {}
 var target_ratio: float = LocalSearchBalancer.RATIO_GUARD
 var current_algo: String = "sa" # "sa" (Simulated Annealing) or "hc" (Hill Climbing)
 
+# CSP Tactical & Environmental Context
+var csp_context: Dictionary = {}
+var enemy_strategy: String = ""
+var enemy_strategy_desc: String = ""
+var gate_seal: String = ""
+var gate_seal_effect: String = ""
+var boss_weapon_effect: String = ""
+var ai_eval_func: int = 1
+var ai_action_order: int = 1
+
 # Balancer results & animation state
 var balancer_result: Dictionary = {}
 var step_logs: Array[Dictionary] = []
@@ -72,13 +82,22 @@ func _ready() -> void:
 	_run_optimization()
 
 ## Setup encounter context before adding to tree
-func setup_encounter(type: String, name: String, element: String, weapon: String, p_stats: Dictionary) -> void:
+func setup_encounter(type: String, name: String, element: String, weapon: String, p_stats: Dictionary, csp_extra: Dictionary = {}) -> void:
 	enemy_type = type
 	enemy_name = name
 	enemy_element = element
 	enemy_weapon = weapon
 	player_stats = p_stats
 	target_ratio = LocalSearchBalancer.RATIO_BOSS if enemy_type == "boss" else LocalSearchBalancer.RATIO_GUARD
+
+	csp_context = csp_extra
+	enemy_strategy = csp_extra.get("strategy", "")
+	enemy_strategy_desc = csp_extra.get("strategy_desc", "")
+	gate_seal = csp_extra.get("gate_seal", "")
+	gate_seal_effect = csp_extra.get("gate_seal_effect", "")
+	boss_weapon_effect = csp_extra.get("boss_weapon_effect", "")
+	ai_eval_func = csp_extra.get("eval_func", 1)
+	ai_action_order = csp_extra.get("action_order", 1)
 
 func _build_ui() -> void:
 	# Full screen root
@@ -134,10 +153,25 @@ func _build_ui() -> void:
 	_enemy_subtitle_label = Label.new()
 	var elem_info: String = " (%s)" % enemy_element if enemy_element.length() > 0 else ""
 	var wep_info: String = " [Senjata: %s]" % enemy_weapon if enemy_weapon.length() > 0 else ""
-	_enemy_subtitle_label.text = "Target: %s%s%s   |   Target Power Ratio: %.2fx" % [enemy_name, elem_info, wep_info, target_ratio]
+	var strat_info: String = "  |  Doktrin Minimax: [%s]" % enemy_strategy if enemy_strategy.length() > 0 else ""
+	_enemy_subtitle_label.text = "Target: %s%s%s%s   |   Target Power Ratio: %.2fx" % [enemy_name, elem_info, wep_info, strat_info, target_ratio]
 	_enemy_subtitle_label.add_theme_font_size_override("font_size", 12)
 	_enemy_subtitle_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.95))
 	title_vbox.add_child(_enemy_subtitle_label)
+
+	if enemy_strategy.length() > 0 or gate_seal_effect.length() > 0 or boss_weapon_effect.length() > 0:
+		var intel_lbl := Label.new()
+		var lines: Array[String] = []
+		if enemy_strategy.length() > 0:
+			lines.append(">> DOKTRIN AI (CSP): %s - %s" % [enemy_strategy, enemy_strategy_desc])
+		if enemy_type == "guard" and gate_seal_effect.length() > 0:
+			lines.append(">> EFEK MEDAN SEGEL [%s]: %s" % [gate_seal, gate_seal_effect])
+		elif enemy_type == "boss" and boss_weapon_effect.length() > 0:
+			lines.append(">> EFEK SENJATA BOS [%s]: %s" % [enemy_weapon, boss_weapon_effect])
+		intel_lbl.text = "\n".join(lines)
+		intel_lbl.add_theme_font_size_override("font_size", 10)
+		intel_lbl.add_theme_color_override("font_color", Color(0.2, 1.0, 0.7))
+		title_vbox.add_child(intel_lbl)
 
 	_algo_btn = Button.new()
 	_algo_btn.text = "Algoritma: Simulated Annealing (Demo)"
@@ -545,7 +579,15 @@ func _on_proceed_pressed() -> void:
 		"player_potions": player_stats.get("potions", 1),
 		"player_atk": player_stats.get("attack", 12),
 		"player_heavy_atk": int(player_stats.get("attack", 12) * 1.8),
-		"player_potion_heal": 30
+		"player_potion_heal": 30,
+		# CSP Tactical & Environmental Parameters
+		"gate_seal": gate_seal,
+		"boss_weapon": enemy_weapon if enemy_type == "boss" else "",
+		"enemy_strategy": enemy_strategy,
+		"gate_seal_effect": gate_seal_effect,
+		"boss_weapon_effect": boss_weapon_effect,
+		"ai_eval_func": ai_eval_func,
+		"ai_action_order": ai_action_order
 	}
 
 	proceed_to_battle.emit(config)

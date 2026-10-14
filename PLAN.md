@@ -45,95 +45,150 @@ Tubes Tahap 3 mengombinasikan seluruh capaian dari tahap sebelumnya menjadi satu
 
 ## 2. Formulasi CSP (Constraint Satisfaction Problem)
 
-Sesuai materi kuliah Modul 6, CSP menentukan **aturan penugasan benteng (*Castle Defense Assignment*)** sebelum musuh di-spawn. CSP menjamin solusi bersifat **Complete** dan **Consistent**.
+Sesuai materi perkuliahan Kecerdasan Buatan (Modul Constraint Satisfaction Problem), CSP menentukan **aturan penugasan benteng (*Castle Defense Assignment*)** sebelum musuh di-spawn ke dalam dunia game. CSP menjamin penugasan variabel bersifat **Complete** dan **Consistent** melalui representasi formal triplet $\langle X, D, C \rangle$.
 
-Untuk mendemonstrasikan graf kekangan yang kaya (*non-trivial constraint network*), CSP ini menggunakan **5 Variabel Utama** dengan **4 Binary Constraints yang saling mengunci (*cyclic/interconnected*)**, sehingga inferensi pemangkasan domain **AC-3 (Arc Consistency)** dan heuristik **MRV / LCV** dapat diuji dan dipamerkan secara nyata kepada dosen penguji.
+Pada Tubes Tahap 3 ini, CSP diformulasikan untuk membentuk **graf kekangan yang saling mengunci (*cyclic/interconnected network*)** dengan **6 Variabel Utama**, sehingga inferensi pemangkasan domain **AC-3 (Arc Consistency)**, serta heuristik **MRV (Minimum Remaining Values)**, **Degree Heuristic**, dan **LCV (Least Constraining Value)** terbukti bekerja secara aktif dan terukur.
+
+Seluruh konfigurasi dihasilkan dalam **satu kali eksekusi CSP** di awal sesi permainan dan langsung mengendalikan:
+1. Jenis musuh Penjaga Gerbang (*Gate Guard*).
+2. Segel Magis penghalang gerbang istana (*Gate Seal*) beserta efek pasif medan tempurnya.
+3. Doktrin/Sifat strategi AI Penjaga (*Guard AI Strategy*).
+4. Senjata legendaris Bos Neraka di Ruang Tahta (*Boss Weapon*) beserta efek pasif uniknya.
+5. Doktrin/Sifat strategi AI Bos Neraka (*Boss AI Strategy*).
+6. Kuota logistik potion istana (*Castle Potions*) & syarat level masuk gerbang (*Gate Level Requirement*).
+
+---
 
 ### 2.1 Komponen Triplet $\langle X, D, C \rangle$
 
-#### A. Variabel ($X$)
-1. $X_{\text{guard\_type}}$: Tipe/Archetype karakter Penjaga Gerbang.
-2. $X_{\text{guard\_weapon}}$: Tipe senjata yang digunakan Penjaga Gerbang.
-3. $X_{\text{boss\_weapon}}$: Senjata utama Bos Neraka di Ruang Tahta.
-4. $X_{\text{gate\_seal}}$: Jenis segel magis penghalang yang terpasang pada Gerbang Besi Neraka.
-5. $X_{\text{gate\_req}}$: Syarat level minimal player untuk menantang Penjaga Gerbang.
-6. $X_{\text{castle\_potions}}$: Kuota total potion logistik istana neraka.
+#### A. Himpunan Variabel ($X$)
+1. $X_{\text{guard\_type}}$: Tipe/Archetype karakter Penjaga Gerbang istana.
+2. $X_{\text{gate\_seal}}$: Jenis segel magis yang mengunci gerbang neraka (memiliki efek medan aktif).
+3. $X_{\text{guard\_strategy}}$: Doktrin taktik Minimax yang diterapkan oleh Penjaga Gerbang.
+4. $X_{\text{boss\_weapon}}$: Senjata utama Bos Neraka di Ruang Tahta (memiliki efek unik pasif).
+5. $X_{\text{boss\_strategy}}$: Doktrin taktik Minimax yang diterapkan oleh Bos Neraka.
+6. $X_{\text{gate\_req}}$: Syarat level minimal player untuk menantang Penjaga Gerbang.
+7. $X_{\text{castle\_potions}}$: Kuota total potion logistik istana neraka.
 
-#### B. Domain ($D$)
-1. $D(X_{\text{guard\_type}}) = \{\text{Infernal Knight (Fisik)}, \text{Abyssal Shaman (Sihir)}, \text{Obsidian Gargoyle (Tank)}\}$
-2. $D(X_{\text{guard\_weapon}}) = \{\text{Flame Greatsword}, \text{Void Staff}, \text{Chaos Mace}\}$
-3. $D(X_{\text{boss\_weapon}}) = \{\text{Flame Scythe}, \text{Shadow Blade}, \text{Blood Trident}\}$
-4. $D(X_{\text{gate\_seal}}) = \{\text{Seal of Fire}, \text{Seal of Shadow}, \text{Seal of Blood}\}$
-5. $D(X_{\text{gate\_req}}) = \{2, 3\}$
-6. $D(X_{\text{castle\_potions}}) = \{2, 3, 4\}$
+#### B. Himpunan Domain ($D$)
+1. $D(X_{\text{guard\_type}}) = \{\text{Infernal Knight}, \text{Abyssal Shaman}, \text{Obsidian Gargoyle}\}$
+2. $D(X_{\text{gate\_seal}}) = \{\text{Seal of Flame}, \text{Seal of Shadow}, \text{Seal of Blood}\}$
+3. $D(X_{\text{guard\_strategy}}) = \{\text{Aggressive}, \text{Defensive}, \text{Tactical}\}$
+4. $D(X_{\text{boss\_weapon}}) = \{\text{Flame Scythe}, \text{Cursed Blade}, \text{Blood Trident}\}$
+5. $D(X_{\text{boss\_strategy}}) = \{\text{Aggressive}, \text{Defensive}, \text{Tactical}\}$
+6. $D(X_{\text{gate\_req}}) = \{2, 3\}$
+7. $D(X_{\text{castle\_potions}}) = \{2, 3, 4\}$
 
-#### C. Batasan / Constraints ($C$)
+#### C. Himpunan Batasan / Constraints ($C$)
 
-##### 1. Unary Constraints (Satu Variabel)
+##### 1. Unary Constraints (Node Consistency)
 * **Kekangan Masuk Gerbang:** Syarat gerbang tidak boleh mengizinkan player Level 1 langsung masuk:
   $$X_{\text{gate\_req}} \ge 2$$
-* **Kelayakan Persenjataan:** Senjata Bos tidak boleh berstatus kosong/unequipped:
+* **Kelayakan Persenjataan Bos:** Senjata Bos tidak boleh berstatus kosong:
   $$X_{\text{boss\_weapon}} \neq \text{None}$$
 
-##### 2. Binary Constraints (Relasi Antar Dua Variabel)
-1. **Constraint 1 (Class Compatibility: $X_{\text{guard\_type}} \leftrightarrow X_{\text{guard\_weapon}}$):**
-   Penjaga hanya boleh memegang senjata yang kompatibel dengan profisiensi kelasnya:
-   * *Infernal Knight (Fisik)* $\in \{\text{Flame Greatsword}, \text{Chaos Mace}\}$ *(tidak boleh memakai Void Staff)*.
-   * *Abyssal Shaman (Sihir)* $\in \{\text{Void Staff}, \text{Flame Greatsword}\}$ *(tidak boleh memakai Chaos Mace berat)*.
-   * *Obsidian Gargoyle (Tank)* $\in \{\text{Chaos Mace}, \text{Void Staff}\}$ *(tidak boleh memakai Flame Greatsword)*.
-   $$\text{Compatible}(X_{\text{guard\_type}}, X_{\text{guard\_weapon}}) = \text{True}$$
+##### 2. Binary Constraints (Relasi Antar Dua Variabel pada Graf)
+1. **Constraint 1 (Affinity: $X_{\text{guard\_type}} \leftrightarrow X_{\text{gate\_seal}}$):**
+   Penjaga hanya mampu menyalurkan dan menjaga segel magis yang selaras dengan afinitas elemennya:
+   * *Infernal Knight (Api)* $\in \{\text{Seal of Flame}, \text{Seal of Blood}\}$ *(tidak kompatibel dengan Seal of Shadow)*.
+   * *Abyssal Shaman (Kegelapan)* $\in \{\text{Seal of Shadow}, \text{Seal of Blood}\}$ *(tidak kompatibel dengan Seal of Flame)*.
+   * *Obsidian Gargoyle (Batu/Bumi)* $\in \{\text{Seal of Flame}, \text{Seal of Shadow}\}$ *(tidak kompatibel dengan Seal of Blood)*.
 
-2. **Constraint 2 (Element Anti-Monopoly: $X_{\text{guard\_type}} \leftrightarrow X_{\text{boss\_weapon}}$):**
-   Elemen dasar pertahanan Penjaga tidak boleh sama dengan senjata Bos agar Player dituntut mengganti strategi elemen saat beralih dari fase Penjaga ke fase Bos:
+2. **Constraint 2 (Doctrine Compatibility: $X_{\text{guard\_type}} \leftrightarrow X_{\text{guard\_strategy}}$):**
+   Gaya tempur Minimax Penjaga harus realistis dengan postur fisiknya:
+   * *Infernal Knight (Agresif & Gesit)* $\in \{\text{Aggressive}, \text{Tactical}\}$.
+   * *Abyssal Shaman (Rapuh tapi Licik)* $\in \{\text{Tactical}, \text{Defensive}\}$.
+   * *Obsidian Gargoyle (Batu Keras Berzirah)* $\in \{\text{Defensive}, \text{Tactical}\}$.
+
+3. **Constraint 3 (Resonance: $X_{\text{gate\_seal}} \leftrightarrow X_{\text{boss\_weapon}}$):**
+   Segel pintu gerbang ditenagai langsung oleh resonansi aura dari senjata Bos di ruang tahta:
+   $$\text{Resonates}(X_{\text{gate\_seal}}, X_{\text{boss\_weapon}}) = \text{True}$$
+   * $\text{Seal of Flame} \iff \text{Flame Scythe}$
+   * $\text{Seal of Shadow} \iff \text{Cursed Blade}$
+   * $\text{Seal of Blood} \iff \text{Blood Trident}$
+
+4. **Constraint 4 (Combat Tempo Diversity: $X_{\text{guard\_strategy}} \leftrightarrow X_{\text{boss\_strategy}}$):**
+   Untuk menjamin variasi pengalaman bermain (*gameplay pacing*) dan mencegah repetisi taktik dalam satu siklus permainan:
+   $$X_{\text{guard\_strategy}} \neq X_{\text{boss\_strategy}}$$
+   *(Jika Penjaga berdoktrin Aggressive, Bos tidak boleh Aggressive; jika Penjaga Defensive, Bos harus Tactical atau Aggressive).*
+
+5. **Constraint 5 (Element Anti-Monopoly: $X_{\text{guard\_type}} \leftrightarrow X_{\text{boss\_weapon}}$):**
+   Elemen pertahanan Penjaga tidak boleh sama dengan senjata Bos, agar pemain terdorong mengubah pendekatan duel:
    $$\text{Element}(X_{\text{guard\_type}}) \neq \text{Element}(X_{\text{boss\_weapon}})$$
-   * Jika *Infernal Knight (Api)* $\implies X_{\text{boss\_weapon}} \neq \text{Flame Scythe}$.
-   * Jika *Abyssal Shaman (Shadow)* $\implies X_{\text{boss\_weapon}} \neq \text{Shadow Blade}$.
+   * Jika *Infernal Knight (Fire)* $\implies X_{\text{boss\_weapon}} \neq \text{Flame Scythe}$.
+   * Jika *Abyssal Shaman (Shadow)* $\implies X_{\text{boss\_weapon}} \neq \text{Cursed Blade}$.
    * Jika *Obsidian Gargoyle (Blood/Earth)* $\implies X_{\text{boss\_weapon}} \neq \text{Blood Trident}$.
 
-3. **Constraint 3 (Armory Core Exclusivity: $X_{\text{guard\_weapon}} \leftrightarrow X_{\text{boss\_weapon}}$):**
-   Gudang persenjataan benteng neraka memiliki stok material inti terbatas; Penjaga dan Bos tidak boleh memakai senjata berbahan inti magis yang sama di satu sesi pertempuran:
-   $$\text{CoreMaterial}(X_{\text{guard\_weapon}}) \neq \text{CoreMaterial}(X_{\text{boss\_weapon}})$$
-   * *Flame Greatsword (Core Api)* $\implies X_{\text{boss\_weapon}} \neq \text{Flame Scythe}$.
-   * *Void Staff (Core Shadow)* $\implies X_{\text{boss\_weapon}} \neq \text{Shadow Blade}$.
-   * *Chaos Mace (Core Darah)* $\implies X_{\text{boss\_weapon}} \neq \text{Blood Trident}$.
-
-4. **Constraint 4 (Elemental Resonance: $X_{\text{boss\_weapon}} \leftrightarrow X_{\text{gate\_seal}}$):**
-   Segel magis pada gerbang istana ditenagai oleh resonansi aura dari senjata Bos di ruang tahta:
-   $$\text{Resonates}(X_{\text{boss\_weapon}}, X_{\text{gate\_seal}}) = \text{True}$$
-   * *Flame Scythe* $\iff$ *Seal of Fire*.
-   * *Shadow Blade* $\iff$ *Seal of Shadow*.
-   * *Blood Trident* $\iff$ *Seal of Blood*.
-
-##### 3. Global Constraint (Multi Variabel)
+##### 3. Global Constraint (Multi-Variabel)
 * **Alokasi Potion Istana:** Jumlah total potion yang dibawa Penjaga dan Bos tidak boleh melebihi pasokan logistik istana:
   $$\text{Potion}_{\text{Guard}} + \text{Potion}_{\text{Boss}} \le X_{\text{castle\_potions}}$$
+  *(Secara default: 1 potion dialokasikan untuk Penjaga, sisanya $\max(1, X_{\text{castle\_potions}} - 1)$ untuk Bos).*
+
+---
 
 ### 2.2 Diagram Graf Kekangan (Constraint Graph)
 
 ```mermaid
 graph TD
     GT["X_guard_type<br>(Knight / Shaman / Gargoyle)"]
-    GW["X_guard_weapon<br>(Greatsword / Staff / Mace)"]
-    BW["X_boss_weapon<br>(Flame Scythe / Shadow Blade / Blood Trident)"]
-    GS["X_gate_seal<br>(Seal Fire / Shadow / Blood)"]
+    GS["X_gate_seal<br>(Flame / Shadow / Blood)"]
+    G_ST["X_guard_strategy<br>(Aggressive / Defensive / Tactical)"]
+    BW["X_boss_weapon<br>(Flame Scythe / Cursed Blade / Blood Trident)"]
+    B_ST["X_boss_strategy<br>(Aggressive / Defensive / Tactical)"]
     GR["X_gate_req<br>(Level 2 / 3)"]
+    CP["X_castle_potions<br>(2 / 3 / 4)"]
 
-    GT ---|"C1: Class Compatibility"| GW
-    GT ---|"C2: Element Anti-Monopoly"| BW
-    GW ---|"C3: Armory Core Exclusivity"| BW
-    BW ---|"C4: Elemental Resonance"| GS
+    GT ---|"C1: Affinity"| GS
+    GT ---|"C2: Doctrine"| G_ST
+    GS ---|"C3: Resonance"| BW
+    G_ST ---|"C4: Diversity"| B_ST
+    BW ---|"C5: Anti-Monopoly"| GT
 
     style GT fill:#4a1515,stroke:#ff5533,stroke-width:2px,color:#fff
-    style GW fill:#2a1b40,stroke:#aa55ff,stroke-width:2px,color:#fff
-    style BW fill:#4a1515,stroke:#ff5533,stroke-width:2px,color:#fff
     style GS fill:#153a4a,stroke:#33ccff,stroke-width:2px,color:#fff
-    style GR fill:#2a3a15,stroke:#88ff33,stroke-width:2px,color:#fff
+    style G_ST fill:#2a1b40,stroke:#aa55ff,stroke-width:2px,color:#fff
+    style BW fill:#4a1515,stroke:#ff5533,stroke-width:2px,color:#fff
+    style B_ST fill:#2a3a15,stroke:#88ff33,stroke-width:2px,color:#fff
+    style GR fill:#333333,stroke:#aaaaaa,stroke-width:1px,color:#fff
+    style CP fill:#333333,stroke:#aaaaaa,stroke-width:1px,color:#fff
 ```
 
 > **Dampak Akademis Arc Consistency (AC-3):**  
-> Graf di atas memiliki siklus segitiga antara $X_{\text{guard\_type}}$, $X_{\text{guard\_weapon}}$, dan $X_{\text{boss\_weapon}}$. Ketika Backtracking memilih suatu nilai untuk $X_{\text{guard\_type}}$, algoritma AC-3 secara otomatis memangkas domain $X_{\text{guard\_weapon}}$, yang kemudian memicu pemangkasan domain $X_{\text{boss\_weapon}}$, lalu membatasi pilihan $X_{\text{gate\_seal}}$. Hal ini membuktikan algoritma CSP bekerja aktif dan terukur.
+> Graf di atas memiliki siklus segitiga antara $X_{\text{guard\_type}}$, $X_{\text{gate\_seal}}$, dan $X_{\text{boss\_weapon}}$, serta rantai inferensi menuju $X_{\text{guard\_strategy}}$ dan $X_{\text{boss\_strategy}}$. Ketika Backtracking menetapkan suatu nilai variabel, AC-3 secara aktif memangkas domain variabel tetangga secara berantai (*cascade pruning*).
 
 ---
+
+### 2.3 Dampak Mekanik Nyata ke Gameplay & Minimax
+
+1. **Efek Pasif Segel Gerbang (*Gate Seal Effect* pada Duel Penjaga):**
+   * **Seal of Flame (Medan Panas Neraka):** Suhu membara membakar stamina pemain. Setiap ronde pertempuran, player terkena 3 damage api tak langsung.
+   * **Seal of Shadow (Kabut Penghisap Jiwa):** Penjaga memperoleh lifesteal pasif; setiap serangannya menyerap 15% damage menjadi pemulihan HP.
+   * **Seal of Blood (Ketahanan Darah Iblis):** Kulit Penjaga mengeras; seluruh damage fisik yang diterima berkurang flat 4 poin.
+
+2. **Efek Pasif Senjata Bos (*Boss Weapon Effect* pada Duel Tahta):**
+   * **Flame Scythe (Infernal Burn):** Serangan Heavy Bos membakar player dengan efek DoT sebesar 5 HP per giliran selama 2 ronde.
+   * **Cursed Blade (Soul Drain):** Serangan biasa Bos menyerap 20% damage menjadi HP bagi Bos.
+   * **Blood Trident (Armor Piercing):** Serangan Bos menembus pertahanan player; aksi `Defend` player hanya mengurangi damage sebesar 20% (bukan 50%).
+
+3. **Injeksi Doktrin CSP Langsung ke Mesin Minimax (`EvalFunc` & `ActionOrder`):**
+   Variabel strategi dari CSP secara matematis mengendalikan parameter [MinimaxSolver.gd](file:///home/richi/Documents/GitHub/infernal-affairs/scripts/battle/MinimaxSolver.gd):
+   * **AGGRESSIVE:**
+     * `eval_func = EvalFunc.AGGRESSIVE` (Fungsi evaluasi berfokus mutlak meminimalisir HP pemain).
+     * `action_order = ActionOrder.AGGRESSIVE` (Heuristik pemesanan aksi menguji `HEAVY_ATTACK` terlebih dahulu untuk pruning $\beta$ instan).
+     * *Counter Pemain:* Pemain memanfaatkan sifat serakah ini dengan memasang `DEFEND` agar serangan berat musuh terblokir dan musuh menderita self-damage.
+   * **DEFENSIVE:**
+     * `eval_func = EvalFunc.DEFENSIVE` (Fungsi evaluasi berfokus memaksimalkan HP diri sendiri).
+     * `action_order = ActionOrder.DEFENSIVE` (Menguji `DEFEND` & `POTION` pertama kali).
+     * *Counter Pemain:* Pemain tidak tergesa-gesa menyerang saat perisai musuh aktif, melainkan memulihkan HP atau menyiapkan serangan berat.
+   * **TACTICAL:**
+     * `eval_func = EvalFunc.WEIGHTED` (Fungsi evaluasi mempertimbangkan selisih HP, stok potion, dan status defense seimbang).
+     * `action_order = ActionOrder.DEFAULT`.
+     * *Counter Pemain:* Duel murni adu taktik menguras potion musuh.
+
+4. **Sistem Intelijen Pemain (Scouting via Warning Sign & Gerbang):**
+   Pemain dapat memeriksa papan peringatan (*Gate Warning Sign*) di Courtyard sebelum bertarung untuk membaca laporan intelijen hasil CSP:
+   * Mengidentifikasi nama Segel Gerbang, doktrin Penjaga, serta petunjuk resonansi senjata Bos di dalam tahta.
+   * Pemain bertindak sebagai komandan taktis yang menyusun persiapan sebelum membuka duel.
 
 ### 2.3 Strategi Visualisasi 9 Variasi Karakter (Pendekatan Modular - Opsi A)
 

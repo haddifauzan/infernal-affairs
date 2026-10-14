@@ -79,7 +79,16 @@ func start_battle_custom(config: Dictionary) -> void:
 	state.enemy_type        = config.get("enemy_type", "guard")
 	state.enemy_name        = config.get("enemy_name", "Hell Guard")
 
-	ai_depth = config.get("minimax_depth", 2)
+	# CSP-driven strategy, seals, and weapon passives
+	state.gate_seal         = config.get("gate_seal", "")
+	state.boss_weapon       = config.get("boss_weapon", "")
+	state.enemy_strategy    = config.get("enemy_strategy", "")
+	state.gate_seal_effect  = config.get("gate_seal_effect", "")
+	state.boss_weapon_effect= config.get("boss_weapon_effect", "")
+
+	ai_depth        = config.get("minimax_depth", 2)
+	ai_eval_func    = config.get("ai_eval_func", MinimaxSolver.EvalFunc.HP_DIFF)
+	ai_action_order = config.get("ai_action_order", MinimaxSolver.ActionOrder.DEFAULT)
 	state.minimax_depth = ai_depth
 
 	state.player_defending  = false

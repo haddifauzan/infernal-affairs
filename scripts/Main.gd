@@ -338,11 +338,21 @@ func _on_player_moved_tahap3(new_pos: Vector2i) -> void:
 			_trigger_encounter("guard", guard_entity)
 			return
 
-	# Warning check at locked gate
+	# Warning check at locked gate & Warning Sign scouting
 	if not GameState.gate_is_open:
 		if new_pos.y == GridManager.COURTYARD_Y and (new_pos.x == GridManager.CENTER_X or new_pos.x == GridManager.CENTER_X + 1):
 			if not GameState.can_challenge_guard():
-				_show_floating_alert("Terlalu lemah! Capai Level 2 dulu!", Color(1.0, 0.35, 0.35))
+				_show_floating_alert("Terlalu lemah! Syarat Gerbang (CSP): Minimal Level %d! (Level kamu: %d)" % [
+					GameState.gate_req_level, GameState.level
+				], Color(1.0, 0.35, 0.35))
+		elif new_pos.y == GridManager.COURTYARD_Y and (new_pos.x == GridManager.CENTER_X - 2 or new_pos.x == GridManager.CENTER_X - 3):
+			var seal = csp_result.get("gate_seal", "Seal of Flame")
+			var g_type = csp_result.get("guard_type", "Infernal Knight")
+			var g_strat = csp_result.get("guard_strategy", "Aggressive")
+			var b_wep = csp_result.get("boss_weapon", "Flame Scythe")
+			_show_floating_alert("📜 INTEL GERBANG: Segel [%s] | Penjaga: %s [%s] | Resonansi Bos: [%s]" % [
+				seal, g_type, g_strat, b_wep
+			], Color(1.0, 0.85, 0.3))
 
 	# Entering Castle -> Play Boss BGM
 	if GameState.gate_is_open and new_pos.y <= GridManager.CASTLE_Y_MAX and not boss_bgm_playing:
@@ -436,11 +446,39 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 		player_hud_panel.visible = false
 
 	var overlay = PreBattleLoadingOverlay.new()
-	var enemy_title = "Hell Guard (%s)" % csp_result.get("guard_type", "Hell Knight") if type == "guard" else "Demon Lord (%s)" % csp_result.get("boss_weapon", "Flame Sword")
-	var enemy_elem = csp_result.get("guard_element", "Fire") if type == "guard" else csp_result.get("boss_element", "Dark")
-	var enemy_wep = "Shield & Hellblade" if type == "guard" else csp_result.get("boss_weapon", "Flame Sword")
+	var enemy_title: String
+	var enemy_elem: String
+	var enemy_wep: String
+	var csp_extra: Dictionary = {}
 
-	overlay.setup_encounter(type, enemy_title, enemy_elem, enemy_wep, GameState.get_status_summary())
+	if type == "guard":
+		var g_type: String = csp_result.get("guard_type", "Infernal Knight")
+		enemy_title = "Hell Guard (%s)" % g_type
+		enemy_elem = csp_result.get("guard_element", "Fire")
+		enemy_wep = "Beban Segel: %s" % csp_result.get("gate_seal", "Seal of Flame")
+		csp_extra = {
+			"strategy": csp_result.get("guard_strategy", "Aggressive"),
+			"strategy_desc": csp_result.get("guard_strategy_desc", ""),
+			"eval_func": csp_result.get("guard_eval_func", 1),
+			"action_order": csp_result.get("guard_action_order", 1),
+			"gate_seal": csp_result.get("gate_seal", "Seal of Flame"),
+			"gate_seal_effect": csp_result.get("gate_seal_effect", "")
+		}
+	else: # "boss"
+		var b_wep: String = csp_result.get("boss_weapon", "Flame Scythe")
+		enemy_title = "Demon Lord (%s)" % b_wep
+		enemy_elem = csp_result.get("boss_element", "Fire")
+		enemy_wep = b_wep
+		csp_extra = {
+			"strategy": csp_result.get("boss_strategy", "Tactical"),
+			"strategy_desc": csp_result.get("boss_strategy_desc", ""),
+			"eval_func": csp_result.get("boss_eval_func", 3),
+			"action_order": csp_result.get("boss_action_order", 0),
+			"boss_weapon": b_wep,
+			"boss_weapon_effect": csp_result.get("boss_weapon_effect", "")
+		}
+
+	overlay.setup_encounter(type, enemy_title, enemy_elem, enemy_wep, GameState.get_status_summary(), csp_extra)
 
 	overlay.proceed_to_battle.connect(func(optimized_config: Dictionary):
 		_start_battle_encounter(optimized_config, func(winner: String):
@@ -643,16 +681,20 @@ func _build_debug_hud() -> void:
 	_add_debug_btn(btn_grid, "Re-solve CSP", func():
 		csp_result = csp_solver.solve(true, true, true, true)
 		GameState.gate_req_level = csp_result.get("gate_req", 2)
-		_show_floating_alert("CSP Baru: Guard=%s, Boss=%s (Syarat: Lvl %d)" % [
-			csp_result.get("guard_type", ""), csp_result.get("boss_weapon", ""), csp_result.get("gate_req", 2)
+		_show_floating_alert("CSP Baru: %s [%s] | %s | %s [%s]" % [
+			csp_result.get("guard_type", ""), csp_result.get("guard_strategy", ""),
+			csp_result.get("gate_seal", ""),
+			csp_result.get("boss_weapon", ""), csp_result.get("boss_strategy", "")
 		], Color(0.2, 1.0, 0.8))
 		_update_debug_hud()
 	)
 
-	_add_debug_btn(btn_grid, "Set: Fire Shaman", func():
-		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Fire Shaman"})
+	_add_debug_btn(btn_grid, "Set: Shaman", func():
+		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Abyssal Shaman"})
 		GameState.gate_req_level = csp_result.get("gate_req", 2)
-		_show_floating_alert("Guard diset ke: Fire Shaman! (Boss Weapon: %s)" % csp_result.get("boss_weapon", ""), Color(1.0, 0.5, 0.2))
+		_show_floating_alert("Guard: Abyssal Shaman! Segel: %s | Boss: %s [%s]" % [
+			csp_result.get("gate_seal", ""), csp_result.get("boss_weapon", ""), csp_result.get("boss_strategy", "")
+		], Color(0.8, 0.5, 1.0))
 		_update_debug_hud()
 	)
 
@@ -688,11 +730,23 @@ func _update_debug_hud() -> void:
 		_count_alive_minions()
 	]
 
-	var csp_g: String = "%s (%s)" % [csp_result.get("guard_type", "-"), csp_result.get("guard_element", "-")]
-	var csp_b: String = "%s (%s)" % [csp_result.get("boss_weapon", "-"), csp_result.get("boss_element", "-")]
-	debug_label.text += "\n[color=yellow]-- CSP Assignment --[/color]\nGuard: [color=cyan]%s[/color]\nBoss: [color=red]%s[/color]\nGate Req: [color=yellow]Lvl %d[/color] | Potions: %d\n[color=gray]Checks: %d (%0.2f ms)[/color]" % [
-		csp_g, csp_b, csp_result.get("gate_req", 2), csp_result.get("castle_potions", 3),
-		csp_result.get("consistency_checks", 0), csp_result.get("time_ms", 0.0)
+	var csp_g: String = "%s [%s] (%s)" % [
+		csp_result.get("guard_type", "-"),
+		csp_result.get("guard_strategy", "-"),
+		csp_result.get("guard_element", "-")
+	]
+	var csp_b: String = "%s [%s] (%s)" % [
+		csp_result.get("boss_weapon", "-"),
+		csp_result.get("boss_strategy", "-"),
+		csp_result.get("boss_element", "-")
+	]
+	var csp_seal: String = "%s" % csp_result.get("gate_seal", "-")
+	debug_label.text += "\n[color=yellow]-- CSP Assignment (Tahap 3) --[/color]\nGuard: [color=cyan]%s[/color]\nGate Seal: [color=orange]%s[/color]\nBoss: [color=red]%s[/color]\nGate Req: [color=yellow]Lvl %d[/color] | Potions: %d (G:%d, B:%d)\n[color=gray]Checks: %d | Backtracks: %d (%0.2f ms)[/color]" % [
+		csp_g, csp_seal, csp_b,
+		csp_result.get("gate_req", 2), csp_result.get("castle_potions", 3),
+		csp_result.get("guard_potions", 1), csp_result.get("boss_potions", 2),
+		csp_result.get("consistency_checks", 0), csp_result.get("backtracks_count", 0),
+		csp_result.get("time_ms", 0.0)
 	]
 
 func _count_alive_minions() -> int:
