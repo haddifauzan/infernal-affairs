@@ -43,6 +43,23 @@ var npc_defending:    bool = false
 var turn:             int  = Turn.PLAYER
 var turn_count:       int  = 0
 
+# --- Tahap 3 Dynamic Stats (Local Search Dynamic Balancer) ---
+var player_max_hp:     int = MAX_HP
+var npc_max_hp:        int = MAX_HP
+var player_atk_dmg:    int = 20
+var player_heavy_dmg:  int = 37
+var player_potion_heal:int = 30
+var player_defense:    int = 5
+
+var npc_atk_dmg:       int = 20
+var npc_heavy_dmg:     int = 37
+var npc_potion_heal:   int = 30
+var npc_defense:       int = 5
+var minimax_depth:     int = 3
+
+var enemy_type:        String = "demon"
+var enemy_name:        String = "Demon Brute"
+
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # TERMINAL TEST
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -82,6 +99,22 @@ func clone() -> BattleState:
 	s.npc_defending    = npc_defending
 	s.turn             = turn
 	s.turn_count       = turn_count
+
+	s.player_max_hp     = player_max_hp
+	s.npc_max_hp        = npc_max_hp
+	s.player_atk_dmg    = player_atk_dmg
+	s.player_heavy_dmg  = player_heavy_dmg
+	s.player_potion_heal= player_potion_heal
+	s.player_defense    = player_defense
+
+	s.npc_atk_dmg       = npc_atk_dmg
+	s.npc_heavy_dmg     = npc_heavy_dmg
+	s.npc_potion_heal   = npc_potion_heal
+	s.npc_defense       = npc_defense
+	s.minimax_depth     = minimax_depth
+
+	s.enemy_type        = enemy_type
+	s.enemy_name        = enemy_name
 	return s
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

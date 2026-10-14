@@ -8,6 +8,8 @@
 class_name BattleHUD
 extends CanvasLayer
 
+signal battle_hud_closed(winner: String)
+
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # CONSTANTS & ASSETS
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -15,11 +17,14 @@ const TEX_PLAYER_PORTRAIT := "res://assets/sprites/characters/player/player_port
 const TEX_PLAYER_AVATAR   := "res://assets/sprites/characters/player/player_avatar.png"
 const TEX_DEMON_AVATAR    := "res://assets/sprites/characters/demon/demon_avatar.png"
 const TEX_DEMON_BOSS      := "res://assets/sprites/characters/demon/demon_boss.png"
+const TEX_MINION_AVATAR   := "res://assets/sprites/characters/minion/avatar_minion.png"
+const TEX_GUARD_AVATAR    := "res://assets/sprites/characters/guard/avatar_guard.png"
 const TEX_AURA_PLAYER     := "res://assets/sprites/ui/effects/aura_player.png"
 const TEX_AURA_DEMON      := "res://assets/sprites/ui/effects/aura_demon.png"
 const TEX_ICON_SWORD      := "res://assets/sprites/ui/skills/icon_sword.png"
 const TEX_ICON_SHIELD     := "res://assets/sprites/ui/skills/icon_shield.png"
 const TEX_ICON_POTION     := "res://assets/sprites/ui/skills/icon_potion.png"
+
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # REFERENCES
@@ -41,6 +46,9 @@ var _player_pot_label: Label
 var _npc_pot_label:   Label
 var _player_def_badge: PanelContainer
 var _npc_def_badge:   PanelContainer
+var _npc_title_label: Label
+var _npc_avatar_rect: TextureRect
+var _btn_return:      Button
 
 # Combat Stage Elements
 var _combat_stage_panel: PanelContainer
@@ -297,6 +305,7 @@ func _build_header_and_hp() -> void:
 	d_title.add_theme_font_size_override("font_size", 11)
 	d_title.add_theme_color_override("font_color", Color(1.0, 0.35, 0.15))
 	d_hdr.add_child(d_title)
+	_npc_title_label = d_title
 
 	var d_avatar := TextureRect.new()
 	d_avatar.texture = load(TEX_DEMON_AVATAR)
@@ -304,6 +313,7 @@ func _build_header_and_hp() -> void:
 	d_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	d_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	d_hdr.add_child(d_avatar)
+	_npc_avatar_rect = d_avatar
 
 	_npc_hp_bar = _make_hp_bar(Color(0.95, 0.25, 0.15))
 	d_box.add_child(_npc_hp_bar)
@@ -1002,6 +1012,31 @@ func _on_npc_thinking(is_thinking: bool) -> void:
 func _on_battle_started(state: BattleState) -> void:
 	_action_history.clear()
 	_update_positions()
+
+	# Dynamically configure enemy visuals and names
+	if is_instance_valid(_npc_title_label):
+		_npc_title_label.text = "%s (Minimax Depth %d)" % [state.enemy_name, state.minimax_depth]
+
+	if is_instance_valid(_npc_avatar_rect):
+		var av_path: String = TEX_DEMON_AVATAR
+		if state.enemy_type == "minion":
+			av_path = TEX_MINION_AVATAR
+		elif state.enemy_type == "guard":
+			av_path = TEX_GUARD_AVATAR
+		var tex = load(av_path)
+		if tex:
+			_npc_avatar_rect.texture = tex
+
+	if is_instance_valid(_demon_sprite):
+		var sp_path: String = TEX_DEMON_BOSS
+		if state.enemy_type == "minion":
+			sp_path = TEX_MINION_AVATAR
+		elif state.enemy_type == "guard":
+			sp_path = TEX_GUARD_AVATAR
+		var stex = load(sp_path)
+		if stex:
+			_demon_sprite.texture = stex
+
 	_refresh_state_data(state)
 	_turn_label.text = "YOUR TURN â€” Select an action:"
 	_show_player_tip()
@@ -1015,17 +1050,33 @@ func _on_battle_ended(winner: String, final_state: BattleState) -> void:
 	if is_instance_valid(_demon_turn_badge):  _demon_turn_badge.visible  = false
 
 	if winner == "player":
-		_turn_label.text = "VICTORY! Demon brute was vanquished!"
+		_turn_label.text = "VICTORY! %s berhasil dikalahkan!" % final_state.enemy_name
 		_turn_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
 		_spawn_floating_text(" VICTORY!", _player_base_pos + Vector2(0, -120), Color(0.2, 1.0, 0.5), true)
 		if is_instance_valid(_demon_sprite):
 			create_tween().tween_property(_demon_sprite, "modulate:a", 0.0, 1.0)
 	else:
-		_turn_label.text = "DEFEATED! The Minimax demon prevailed."
+		_turn_label.text = "DEFEATED! Kamu dikalahkan oleh %s..." % final_state.enemy_name
 		_turn_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.2))
 		_spawn_floating_text(" DEFEATED!", _player_base_pos + Vector2(0, -120), Color(1.0, 0.25, 0.2), true)
 		if is_instance_valid(_player_sprite):
 			create_tween().tween_property(_player_sprite, "modulate:a", 0.0, 1.0)
+
+	# Spawn Return button to safely return to overworld adventure
+	if not is_instance_valid(_btn_return):
+		_btn_return = Button.new()
+		_btn_return.text = "  Kembali ke Petualangan [Lanjut]  "
+		_btn_return.add_theme_font_size_override("font_size", 13)
+		_btn_return.custom_minimum_size = Vector2(260, 40)
+		var btn_style := StyleBoxFlat.new()
+		btn_style.bg_color = Color(0.1, 0.7, 0.4, 0.95) if winner == "player" else Color(0.8, 0.2, 0.2, 0.95)
+		btn_style.set_corner_radius_all(6)
+		_btn_return.add_theme_stylebox_override("normal", btn_style)
+		_btn_return.pressed.connect(func():
+			battle_hud_closed.emit(winner)
+			queue_free()
+		)
+		_combat_column.add_child(_btn_return)
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # STATE REFRESH & SMOOTH HP TRANSITION
@@ -1035,18 +1086,20 @@ func _smooth_refresh_hp(state: BattleState) -> void:
 	tw.tween_property(_player_hp_bar, "value", float(state.player_hp), 0.35).set_trans(Tween.TRANS_QUAD)
 	tw.tween_property(_npc_hp_bar,    "value", float(state.npc_hp),    0.35).set_trans(Tween.TRANS_QUAD)
 
-	_player_hp_label.text = "HP: %d / %d" % [state.player_hp, BattleState.MAX_HP]
-	_npc_hp_label.text    = "HP: %d / %d" % [state.npc_hp,    BattleState.MAX_HP]
+	_player_hp_label.text = "HP: %d / %d" % [state.player_hp, state.player_max_hp]
+	_npc_hp_label.text    = "HP: %d / %d" % [state.npc_hp,    state.npc_max_hp]
 	_player_pot_label.text = "Potions: %d/3" % state.player_potions
 	_npc_pot_label.text    = "Potions: %d/3" % state.npc_potions
 
 	_refresh_defending_badges(state)
 
 func _refresh_state_data(state: BattleState) -> void:
+	_player_hp_bar.max_value = float(state.player_max_hp)
+	_npc_hp_bar.max_value    = float(state.npc_max_hp)
 	_player_hp_bar.value  = state.player_hp
 	_npc_hp_bar.value     = state.npc_hp
-	_player_hp_label.text = "HP: %d / %d" % [state.player_hp, BattleState.MAX_HP]
-	_npc_hp_label.text    = "HP: %d / %d" % [state.npc_hp,    BattleState.MAX_HP]
+	_player_hp_label.text = "HP: %d / %d" % [state.player_hp, state.player_max_hp]
+	_npc_hp_label.text    = "HP: %d / %d" % [state.npc_hp,    state.npc_max_hp]
 	_player_pot_label.text = "Potions: %d/3" % state.player_potions
 	_npc_pot_label.text    = "Potions: %d/3" % state.npc_potions
 

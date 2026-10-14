@@ -20,11 +20,12 @@ var potions: int = 1
 var attack: int = 12
 var defense: int = 5
 
-# --- Progression Flags ---
+# --- Progression Flags & CSP Requirements ---
 var has_castle_key: bool = false
 var gate_is_open: bool = false
 var boss_defeated: bool = false
 var guard_defeated: bool = false
+var gate_req_level: int = 2
 
 # --- Constants ---
 const EXP_PER_LEVEL: int = 100
@@ -92,7 +93,7 @@ func award_boss_victory() -> void:
 
 ## Check if player meets the minimum level to challenge the guard.
 func can_challenge_guard() -> bool:
-	return level >= 2
+	return level >= gate_req_level
 
 ## Check if player can enter the castle (gate must be open).
 func can_enter_castle() -> bool:

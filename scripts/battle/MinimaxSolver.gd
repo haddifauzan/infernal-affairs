@@ -212,7 +212,7 @@ func _expectimax(state: BattleState, depth: int, is_maximising: bool) -> float:
 func _apply_heavy_attack_hit(state: BattleState) -> BattleState:
 	var s := state.clone()
 	## It's player's turn â€” player uses heavy on NPC
-	var dmg := HEAVY_DMG
+	var dmg := s.player_heavy_dmg
 	if s.npc_defending:
 		dmg = int(dmg * DEFEND_REDUCTION)
 	s.npc_hp     = max(0, s.npc_hp - dmg)
@@ -264,7 +264,8 @@ func apply_action(state: BattleState, action: int) -> BattleState:
 
 	match action:
 		Action.ATTACK:
-			var dmg := ATK_DMG
+			var base_dmg := s.npc_atk_dmg if is_npc else s.player_atk_dmg
+			var dmg := base_dmg
 			if def_defending:
 				dmg = int(dmg * DEFEND_REDUCTION)
 			if is_npc:
@@ -275,10 +276,11 @@ func apply_action(state: BattleState, action: int) -> BattleState:
 				s.npc_defending = false
 
 		Action.HEAVY_ATTACK:
-			var dmg := HEAVY_DMG
+			var base_heavy := s.npc_heavy_dmg if is_npc else s.player_heavy_dmg
+			var dmg := base_heavy
 			if def_defending:
 				## Defend does NOT fully block heavy (flavour rule: only 30% reduction)
-				dmg = int(HEAVY_DMG * 0.7)
+				dmg = int(base_heavy * 0.7)
 			if is_npc:
 				s.player_hp = max(0, s.player_hp - dmg)
 				s.npc_hp    = max(0, s.npc_hp    - HEAVY_SELF_DMG)
@@ -296,10 +298,10 @@ func apply_action(state: BattleState, action: int) -> BattleState:
 
 		Action.POTION:
 			if is_npc:
-				s.npc_hp      = min(BattleState.MAX_HP, s.npc_hp + POTION_HEAL)
+				s.npc_hp      = min(s.npc_max_hp, s.npc_hp + s.npc_potion_heal)
 				s.npc_potions = max(0, s.npc_potions - 1)
 			else:
-				s.player_hp      = min(BattleState.MAX_HP, s.player_hp + POTION_HEAL)
+				s.player_hp      = min(s.player_max_hp, s.player_hp + s.player_potion_heal)
 				s.player_potions = max(0, s.player_potions - 1)
 
 	## Advance turn

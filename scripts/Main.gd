@@ -19,9 +19,13 @@ var current_algorithm: String = "astar"
 var is_game_over: bool = false
 var is_in_battle: bool = false
 
-# Battle system (Tahap 2 - kept as hook)
+# Battle system (Tahap 2 & Tahap 3 integrated)
 var battle_manager: BattleManager
 var battle_hud: BattleHUD
+
+# --- Tahap 3: CSP Solver & Configuration ---
+var csp_solver: CSPSolver = CSPSolver.new()
+var csp_result: Dictionary = {}
 
 # --- Tahap 3: NPC Entities ---
 var minion_scene: PackedScene = preload("res://scenes/Minion.tscn")
@@ -127,6 +131,10 @@ func start_new_game() -> void:
 		battle_hud = null
 	_cleanup_npcs()
 	_cleanup_map_props()
+
+	# Solve CSP for Castle Defense Assignment (Triplets <X, D, C> with MRV, LCV, AC-3)
+	csp_result = csp_solver.solve(true, true, true)
+	GameState.gate_req_level = csp_result.get("gate_req", 2)
 
 	# Generate expanded 2-map 3-zone layout
 	grid_manager.generate_new_map()
@@ -324,7 +332,7 @@ func _on_player_moved_tahap3(new_pos: Vector2i) -> void:
 			return
 
 func _trigger_encounter(enemy_type: String, enemy_node: Node2D) -> void:
-	if encounter_cooldown > 0.0:
+	if encounter_cooldown > 0.0 or is_in_battle or is_game_over:
 		return
 	encounter_cooldown = ENCOUNTER_COOLDOWN_TIME
 
@@ -338,43 +346,141 @@ func _trigger_encounter(enemy_type: String, enemy_node: Node2D) -> void:
 		"boss":
 			_handle_boss_encounter()
 
+# ---------------------------------------------------------------
+# TAHAP 3 ENCOUNTER FLOW (Turn-Based Duel + Pre-Battle Balancer)
+# ---------------------------------------------------------------
 func _handle_minion_encounter(minion: MinionEntity) -> void:
-	minion.on_defeated()
-	var leveled_up := GameState.award_minion_exp()
+	var p_stats: Dictionary = GameState.get_status_summary()
+	var minion_config := {
+		"enemy_type": "minion",
+		"enemy_name": "Hell Minion (Imp)",
+		"npc_hp": 60,
+		"npc_max_hp": 60,
+		"npc_atk": 10,
+		"npc_heavy_atk": 20,
+		"npc_potions": 1,
+		"npc_potion_heal": 20,
+		"minimax_depth": 1,
+		"player_hp": p_stats.get("hp", 100),
+		"player_max_hp": p_stats.get("max_hp", 100),
+		"player_potions": p_stats.get("potions", 1),
+		"player_atk": p_stats.get("attack", 12),
+		"player_heavy_atk": int(p_stats.get("attack", 12) * 1.8),
+		"player_potion_heal": 30
+	}
 
-	if leveled_up:
-		_play_sfx(sfx_level_up)
-		_show_floating_alert("LEVEL UP! Naik ke Level %d! Syarat Gerbang Terpenuhi!" % GameState.level, Color(1.0, 0.85, 0.0))
-	else:
-		_show_floating_alert("Minion Dikalahkan! +50 EXP (%d/100)" % GameState.exp, Color(0.3, 1.0, 0.5))
-
-	_update_debug_hud()
+	_start_battle_encounter(minion_config, func(winner: String):
+		if winner == "player":
+			minion.on_defeated()
+			var leveled_up := GameState.award_minion_exp()
+			if leveled_up:
+				_play_sfx(sfx_level_up)
+				_show_floating_alert("LEVEL UP! Naik ke Level %d! Syarat Gerbang Terpenuhi!" % GameState.level, Color(1.0, 0.85, 0.0))
+			else:
+				_show_floating_alert("Minion Dikalahkan! +50 EXP (%d/100)" % GameState.exp, Color(0.3, 1.0, 0.5))
+		else:
+			GameState.hp = maxi(20, int(GameState.max_hp * 0.5))
+			GameState.hp_changed.emit(GameState.hp)
+			_show_floating_alert("Kamu mundur dari Minion untuk memulihkan diri! (HP 50%)", Color(1.0, 0.35, 0.35))
+	)
 
 func _handle_guard_encounter(guard: GuardEntity) -> void:
 	if not GameState.can_challenge_guard():
-		_show_floating_alert("Terlalu lemah! Capai Level 2 dulu!", Color(1.0, 0.3, 0.3))
+		_show_floating_alert("Terlalu lemah! Syarat Gerbang (CSP): Minimal Level %d! (Level kamu: %d)" % [
+			GameState.gate_req_level, GameState.level
+		], Color(1.0, 0.35, 0.35))
 		return
 
-	guard.on_defeated()
-	GameState.award_guard_victory()
-	_play_sfx(sfx_level_up)
-	_show_floating_alert("Penjaga Dikalahkan! Castle Key Diperoleh! Naik ke Level 3!", Color(1.0, 0.85, 0.0))
-	_update_debug_hud()
+	_open_pre_battle_overlay("guard", guard)
 
 func _handle_boss_encounter() -> void:
 	if GameState.boss_defeated:
 		return
+	if not GameState.gate_is_open:
+		_show_floating_alert("Pintu Tahta Terkunci! Kalahkan Penjaga Gerbang terlebih dahulu!", Color(1.0, 0.35, 0.35))
+		return
 
-	GameState.award_boss_victory()
-	demon.is_active = false
-	var tween = create_tween()
-	tween.tween_property(demon, "modulate:a", 0.0, 1.0)
+	_open_pre_battle_overlay("boss", demon)
 
-	path_dot_visualizer.clear_path()
-	is_game_over = true
-	_show_floating_alert("BOS NERAKA DIKALAHKAN! KEMENANGAN MUTLAK!", Color(1.0, 0.85, 0.0))
-	info_label.text = "VICTORY! Istana Neraka Ditaklukkan! [R] Main Ulang"
-	_update_debug_hud()
+func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
+	is_in_battle = true
+	player.is_active = false
+	if demon:
+		demon.is_active = false
+
+	var overlay = PreBattleLoadingOverlay.new()
+	var enemy_title = "Hell Guard (%s)" % csp_result.get("guard_type", "Hell Knight") if type == "guard" else "Demon Lord (%s)" % csp_result.get("boss_weapon", "Flame Sword")
+	var enemy_elem = csp_result.get("guard_element", "Fire") if type == "guard" else csp_result.get("boss_element", "Dark")
+	var enemy_wep = "Shield & Hellblade" if type == "guard" else csp_result.get("boss_weapon", "Flame Sword")
+
+	overlay.setup_encounter(type, enemy_title, enemy_elem, enemy_wep, GameState.get_status_summary())
+
+	overlay.proceed_to_battle.connect(func(optimized_config: Dictionary):
+		_start_battle_encounter(optimized_config, func(winner: String):
+			if type == "guard":
+				if winner == "player":
+					if is_instance_valid(guard_entity):
+						guard_entity.on_defeated()
+					GameState.award_guard_victory()
+					_play_sfx(sfx_level_up)
+					_show_floating_alert("Penjaga Dikalahkan! Castle Key Diperoleh! Naik ke Level 3! Gerbang Terbuka!", Color(1.0, 0.85, 0.0))
+				else:
+					GameState.hp = maxi(30, int(GameState.max_hp * 0.5))
+					GameState.hp_changed.emit(GameState.hp)
+					_show_floating_alert("Kamu dipukul mundur oleh Penjaga Gerbang! (HP 50%)", Color(1.0, 0.35, 0.35))
+			elif type == "boss":
+				if winner == "player":
+					GameState.award_boss_victory()
+					demon.is_active = false
+					var tween = create_tween()
+					tween.tween_property(demon, "modulate:a", 0.0, 1.0)
+					path_dot_visualizer.clear_path()
+					is_game_over = true
+					_play_sfx(sfx_level_up)
+					_show_floating_alert("BOS NERAKA DIKALAHKAN! KEMENANGAN MUTLAK!", Color(1.0, 0.85, 0.0))
+					info_label.text = "VICTORY! Istana Neraka Ditaklukkan! [R] Main Ulang"
+				else:
+					GameState.hp = maxi(40, int(GameState.max_hp * 0.5))
+					GameState.hp_changed.emit(GameState.hp)
+					_show_floating_alert("Kamu dipukul mundur oleh Bos Neraka! (HP 50%)", Color(1.0, 0.35, 0.35))
+		)
+	)
+
+	overlay.cancelled.connect(func():
+		is_in_battle = false
+		player.is_active = true
+		if demon and not GameState.boss_defeated:
+			demon.is_active = true
+		encounter_cooldown = 1.0
+	)
+
+	add_child(overlay)
+
+func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> void:
+	is_in_battle = true
+	player.is_active = false
+	if demon:
+		demon.is_active = false
+
+	if is_instance_valid(battle_hud):
+		battle_hud.queue_free()
+
+	battle_hud = BattleHUD.new()
+	battle_hud.name = "BattleHUD"
+	battle_hud.init(battle_manager)
+
+	battle_hud.battle_hud_closed.connect(func(winner: String):
+		is_in_battle = false
+		player.is_active = true
+		if demon and not GameState.boss_defeated:
+			demon.is_active = true
+		encounter_cooldown = ENCOUNTER_COOLDOWN_TIME
+		on_finished_cb.call(winner)
+		_update_debug_hud()
+	)
+
+	add_child(battle_hud)
+	battle_manager.start_battle_custom(config)
 
 # ---------------------------------------------------------------
 # GATE STATE CHANGES
@@ -439,8 +545,8 @@ func _build_debug_hud() -> void:
 	debug_panel.anchors_preset = Control.PRESET_BOTTOM_LEFT
 	debug_panel.offset_left = 10
 	debug_panel.offset_bottom = -10
-	debug_panel.offset_top = -280
-	debug_panel.offset_right = 320
+	debug_panel.offset_top = -390
+	debug_panel.offset_right = 330
 
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.05, 0.03, 0.08, 0.88)
@@ -501,11 +607,17 @@ func _build_debug_hud() -> void:
 		_show_floating_alert("Teleport ke Depan Gerbang", Color(0.5, 0.8, 1.0))
 	)
 
-	_add_debug_btn(btn_grid, "TP -> Throne", func():
-		var tp_pos = Vector2i(GridManager.CENTER_X, 6)
-		player.set_grid_position(tp_pos)
-		player.position.x = (GridManager.CENTER_X + 1.0) * float(grid_manager.tile_size)
-		_show_floating_alert("Teleport ke Ruang Tahta", Color(0.5, 0.8, 1.0))
+	_add_debug_btn(btn_grid, "Re-solve CSP", func():
+		csp_result = csp_solver.solve(true, true, true)
+		GameState.gate_req_level = csp_result.get("gate_req", 2)
+		_show_floating_alert("CSP Baru: Guard=%s, Boss=%s (Syarat: Lvl %d)" % [
+			csp_result.get("guard_type", ""), csp_result.get("boss_weapon", ""), csp_result.get("gate_req", 2)
+		], Color(0.2, 1.0, 0.8))
+		_update_debug_hud()
+	)
+
+	_add_debug_btn(btn_grid, "Test Balancer", func():
+		_open_pre_battle_overlay("guard", guard_entity)
 	)
 
 	$CanvasLayer.add_child(debug_panel)
@@ -532,6 +644,13 @@ func _update_debug_hud() -> void:
 		s.attack, s.defense,
 		key_str, gate_str, boss_str,
 		_count_alive_minions()
+	]
+
+	var csp_g: String = "%s (%s)" % [csp_result.get("guard_type", "-"), csp_result.get("guard_element", "-")]
+	var csp_b: String = "%s (%s)" % [csp_result.get("boss_weapon", "-"), csp_result.get("boss_element", "-")]
+	debug_label.text += "\n[color=yellow]â”€â”€ CSP Assignment â”€â”€[/color]\nGuard: [color=cyan]%s[/color]\nBoss: [color=red]%s[/color]\nGate Req: [color=yellow]Lvl %d[/color] | Potions: %d\n[color=gray]Checks: %d (%0.2f ms)[/color]" % [
+		csp_g, csp_b, csp_result.get("gate_req", 2), csp_result.get("castle_potions", 3),
+		csp_result.get("consistency_checks", 0), csp_result.get("time_ms", 0.0)
 	]
 
 func _count_alive_minions() -> int:
@@ -607,11 +726,12 @@ func _physics_process(delta: float) -> void:
 # ---------------------------------------------------------------
 # HOOKS FOR TURN-BASED BATTLE
 # ---------------------------------------------------------------
-func _on_battle_started() -> void:
+func _on_battle_started(_state: BattleState = null) -> void:
 	is_in_battle = true
 	player.is_active = false
+	if demon:
+		demon.is_active = false
 
-func _on_battle_ended(_result: Dictionary) -> void:
-	is_in_battle = false
-	player.is_active = true
-	_update_debug_hud()
+func _on_battle_ended(_winner: String = "", _final_state: BattleState = null) -> void:
+	# Handled cleanly via BattleHUD.battle_hud_closed signal
+	pass

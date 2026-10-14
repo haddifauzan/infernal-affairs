@@ -60,6 +60,41 @@ func start_battle(player_hp: int = BattleState.MAX_HP, npc_hp: int = BattleState
 	battle_started.emit(state)
 	turn_changed.emit("player")
 
+func start_battle_custom(config: Dictionary) -> void:
+	state = BattleState.new()
+	state.player_max_hp     = config.get("player_max_hp", BattleState.MAX_HP)
+	state.player_hp         = config.get("player_hp", state.player_max_hp)
+	state.player_potions    = config.get("player_potions", 1)
+	state.player_atk_dmg    = config.get("player_atk", 20)
+	state.player_heavy_dmg  = config.get("player_heavy_atk", 37)
+	state.player_potion_heal= config.get("player_potion_heal", 30)
+
+	state.npc_max_hp        = config.get("npc_max_hp", 100)
+	state.npc_hp            = config.get("npc_hp", state.npc_max_hp)
+	state.npc_potions       = config.get("npc_potions", 1)
+	state.npc_atk_dmg       = config.get("npc_atk", 16)
+	state.npc_heavy_dmg     = config.get("npc_heavy_atk", 28)
+	state.npc_potion_heal   = config.get("npc_potion_heal", 25)
+
+	state.enemy_type        = config.get("enemy_type", "guard")
+	state.enemy_name        = config.get("enemy_name", "Hell Guard")
+
+	ai_depth = config.get("minimax_depth", 2)
+	state.minimax_depth = ai_depth
+
+	state.player_defending  = false
+	state.npc_defending     = false
+	state.turn = BattleState.Turn.PLAYER
+
+	is_active    = true
+	_waiting_npc = false
+	_npc_timer   = 0.0
+
+	_apply_solver_settings()
+	battle_started.emit(state)
+	turn_changed.emit("player")
+
+
 func stop_battle() -> void:
 	is_active    = false
 	_waiting_npc = false
