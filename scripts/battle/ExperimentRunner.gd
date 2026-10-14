@@ -1,19 +1,19 @@
 ## ExperimentRunner.gd
-## â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+## ------------------------------------------------------------------------------
 ## Headless auto-battle engine for AI experiments.
 ##
-## Runs simulated battles with no player input â€” both sides controlled by AI.
+## Runs simulated battles with no player input  -  both sides controlled by AI.
 ## The "player" side uses a fixed reactive strategy (configurable) so results
 ## reflect NPC behaviour changes, not human skill variance.
 ##
 ## Experiments:
-##   1. Minimax vs Alpha-Beta â€” same depth, compare node counts & win rates
-##   2. Eval function comparison â€” HP_DIFF vs Aggressive vs Defensive vs Weighted vs HP_Ratio
-##   3. Action order comparison â€” DEFAULT vs AGGRESSIVE vs DEFENSIVE vs RANDOM
-##   4. Depth comparison â€” depth 1..6
+##   1. Minimax vs Alpha-Beta  -  same depth, compare node counts & win rates
+##   2. Eval function comparison  -  HP_DIFF vs Aggressive vs Defensive vs Weighted vs HP_Ratio
+##   3. Action order comparison  -  DEFAULT vs AGGRESSIVE vs DEFENSIVE vs RANDOM
+##   4. Depth comparison  -  depth 1..6
 ##   5. NPC behaviour characterisation
 ##   (Expectimax included as Algorithm option in experiments 1/2)
-## â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+## ------------------------------------------------------------------------------
 class_name ExperimentRunner
 extends RefCounted
 
@@ -28,13 +28,13 @@ enum PlayerStrategy {
 const BATTLES_PER_CONFIG: int = 10
 const MAX_BATTLE_TURNS:   int = BattleState.MAX_TURNS
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # PUBLIC ENTRY: run_comparison
 # Returns a BBCode string summary for display in BattleHUD._exp_log
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func run_comparison(manager: BattleManager) -> String:
 	var out := ""
-	out += "[color=#ffcc00][b]â•â•â• EXPERIMENT RESULTS â•â•â•[/b][/color]\n"
+	out += "[color=#ffcc00][b]=== EXPERIMENT RESULTS ===[/b][/color]\n"
 	out += "[color=#888]Player strategy: GREEDY  |  %d battles/config[/color]\n\n" % BATTLES_PER_CONFIG
 
 	out += _exp1_algo_comparison()
@@ -44,14 +44,14 @@ func run_comparison(manager: BattleManager) -> String:
 	out += _exp5_behaviour_summary()
 	return out
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # EXPERIMENT 1: Minimax vs Alpha-Beta vs Expectimax
 # Same config, compare node counts and decisions
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _exp1_algo_comparison() -> String:
 	var out := "[color=#aa88ff][b]Exp 1: Algorithm Comparison (depth=4, HP_DIFF)[/b][/color]\n"
 	out += "%-12s %-8s %-8s %-8s %-8s\n" % ["Algorithm", "W%", "Nodes", "Pruned", "Depth"]
-	out += "[color=#444]" + "â”€".repeat(50) + "[/color]\n"
+	out += "[color=#444]" + "-".repeat(50) + "[/color]\n"
 
 	var configs := [
 		[MinimaxSolver.Algorithm.MINIMAX,    "Minimax"],
@@ -68,13 +68,13 @@ func _exp1_algo_comparison() -> String:
 	out += "\n"
 	return out
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # EXPERIMENT 2: Eval Function Comparison
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _exp2_eval_comparison() -> String:
 	var out := "[color=#aa88ff][b]Exp 2: Eval Function Comparison (Alpha-Beta, depth=4)[/b][/color]\n"
 	out += "%-12s %-8s %-8s %-8s\n" % ["Eval", "W%", "D%", "L%"]
-	out += "[color=#444]" + "â”€".repeat(45) + "[/color]\n"
+	out += "[color=#444]" + "-".repeat(45) + "[/color]\n"
 
 	var evals := [
 		[MinimaxSolver.EvalFunc.HP_DIFF,    "HP Diff"],
@@ -92,13 +92,13 @@ func _exp2_eval_comparison() -> String:
 	out += "\n"
 	return out
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # EXPERIMENT 3: Action Order Comparison
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _exp3_order_comparison() -> String:
 	var out := "[color=#aa88ff][b]Exp 3: Action Order Comparison (Alpha-Beta, depth=4, HP_DIFF)[/b][/color]\n"
 	out += "%-12s %-8s %-8s %-8s\n" % ["Order", "W%", "Nodes", "Pruned"]
-	out += "[color=#444]" + "â”€".repeat(45) + "[/color]\n"
+	out += "[color=#444]" + "-".repeat(45) + "[/color]\n"
 
 	var orders := [
 		[MinimaxSolver.ActionOrder.DEFAULT,    "Default"],
@@ -113,13 +113,13 @@ func _exp3_order_comparison() -> String:
 	out += "\n"
 	return out
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # EXPERIMENT 4: Depth Comparison
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _exp4_depth_comparison() -> String:
 	var out := "[color=#aa88ff][b]Exp 4: Depth Comparison (Alpha-Beta, HP_DIFF)[/b][/color]\n"
 	out += "%-8s %-8s %-10s %-10s\n" % ["Depth", "W%", "Nodes", "Pruned"]
-	out += "[color=#444]" + "â”€".repeat(42) + "[/color]\n"
+	out += "[color=#444]" + "-".repeat(42) + "[/color]\n"
 
 	for d in range(1, 7):
 		var r := _run_battles(MinimaxSolver.Algorithm.ALPHABETA, MinimaxSolver.EvalFunc.HP_DIFF, MinimaxSolver.ActionOrder.DEFAULT, d)
@@ -128,14 +128,14 @@ func _exp4_depth_comparison() -> String:
 	out += "\n"
 	return out
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # EXPERIMENT 5: NPC Behaviour Profile
 # Shows what actions the NPC prefers under different eval functions
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _exp5_behaviour_summary() -> String:
 	var out := "[color=#aa88ff][b]Exp 5: NPC Behaviour Profile (action frequencies)[/b][/color]\n"
 	out += "%-12s %-8s %-8s %-8s %-8s\n" % ["Eval", "Atk%", "Heavy%", "Def%", "Pot%"]
-	out += "[color=#444]" + "â”€".repeat(50) + "[/color]\n"
+	out += "[color=#444]" + "-".repeat(50) + "[/color]\n"
 
 	var evals := [
 		[MinimaxSolver.EvalFunc.HP_DIFF,    "HP Diff"],
@@ -154,11 +154,11 @@ func _exp5_behaviour_summary() -> String:
 	out += "\n"
 	return out
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # CORE SIMULATION
 # Runs BATTLES_PER_CONFIG headless battles with given config.
 # Returns aggregate statistics.
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _run_battles(algo: int, eval: int, order: int, depth: int) -> Dictionary:
 	var solver := MinimaxSolver.new()
 	solver.algorithm    = algo
@@ -230,9 +230,9 @@ func _run_battles(algo: int, eval: int, order: int, depth: int) -> Dictionary:
 		"total_npc_actions": total_npc_actions,
 	}
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # PLAYER SIMULATION STRATEGIES
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
 ## GREEDY: use potion if HP critical, else always attack
 func _greedy_player_action(state: BattleState) -> int:

@@ -36,6 +36,9 @@ func _setup_animations() -> void:
 		frames.add_animation("idle_" + dir_name)
 		frames.set_animation_loop("idle_" + dir_name, true)
 		frames.set_animation_speed("idle_" + dir_name, 4.0)
+		frames.add_animation("run_" + dir_name)
+		frames.set_animation_loop("run_" + dir_name, true)
+		frames.set_animation_speed("run_" + dir_name, 6.0)
 
 	var idle_tex = load("res://assets/sprites/characters/guard/guard_knight.png")
 

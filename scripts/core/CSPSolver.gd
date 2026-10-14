@@ -54,13 +54,24 @@ func get_initial_domains() -> Dictionary:
 
 ## Solves the CSP using Backtracking Search with MRV, Degree Heuristic, LCV, and AC-3.
 ## Returns a Dictionary containing the solution and search metrics.
-func solve(use_mrv: bool = true, use_lcv: bool = true, use_ac3: bool = true) -> Dictionary:
+func solve(use_mrv: bool = true, use_lcv: bool = true, use_ac3: bool = true, randomize: bool = true, overrides: Dictionary = {}) -> Dictionary:
 	var start_time: int = Time.get_ticks_usec()
 	assignments_count = 0
 	consistency_checks = 0
 	backtracks_count = 0
 
 	var domains: Dictionary = get_initial_domains()
+
+	# Apply overrides if specified (e.g. {"guard_type": "Fire Shaman"})
+	for key in overrides:
+		if domains.has(key):
+			domains[key] = [overrides[key]]
+
+	# Randomize domain order for variation between playthroughs
+	if randomize:
+		for k in domains:
+			if not overrides.has(k):
+				domains[k].shuffle()
 
 	# 1. Unary constraint enforcement (Node Consistency)
 	_apply_unary_constraints(domains)

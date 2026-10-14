@@ -55,6 +55,20 @@ var debug_panel: PanelContainer
 var debug_label: RichTextLabel
 var debug_visible: bool = true
 
+# --- Tahap 3: Player Stats HUD (Bottom Left) ---
+var player_hud_panel: PanelContainer
+var hud_avatar_rect: TextureRect
+var hud_level_badge: Label
+var hud_hp_bar: ProgressBar
+var hud_hp_label: Label
+var hud_exp_bar: ProgressBar
+var hud_exp_label: Label
+var hud_stats_label: Label
+var hud_key_badge: Label
+var hud_cheat_btn: Button
+var hud_auto_btn: Button
+var cheat_auto_level_enabled: bool = false
+
 # --- Tahap 3: Floating Alert ---
 var floating_label: Label = null
 
@@ -97,6 +111,8 @@ func _ready() -> void:
 
 	# GameState signals
 	GameState.level_changed.connect(_on_level_changed)
+	GameState.hp_changed.connect(func(_hp): _update_player_stats_hud())
+	GameState.exp_changed.connect(func(_exp): _update_player_stats_hud())
 	GameState.gate_unlocked.connect(_on_gate_unlocked)
 	GameState.key_obtained.connect(_on_key_obtained)
 
@@ -107,8 +123,16 @@ func _ready() -> void:
 	battle_manager.battle_started.connect(_on_battle_started)
 	battle_manager.battle_ended.connect(_on_battle_ended)
 
-	# Build debug HUD
+	# Build Player Stats HUD (Bottom Left)
+	_build_player_stats_hud()
+
+	# Build debug HUD (Bottom Right, F3)
 	_build_debug_hud()
+
+	# Connect window resize to dynamically maintain HUD bottom anchoring
+	if get_viewport():
+		get_viewport().size_changed.connect(_reposition_hud_panels)
+	_reposition_hud_panels()
 
 	start_new_game()
 
@@ -133,7 +157,7 @@ func start_new_game() -> void:
 	_cleanup_map_props()
 
 	# Solve CSP for Castle Defense Assignment (Triplets <X, D, C> with MRV, LCV, AC-3)
-	csp_result = csp_solver.solve(true, true, true)
+	csp_result = csp_solver.solve(true, true, true, true)
 	GameState.gate_req_level = csp_result.get("gate_req", 2)
 
 	# Generate expanded 2-map 3-zone layout
@@ -174,8 +198,9 @@ func start_new_game() -> void:
 	camera.limit_bottom = grid_manager.height * grid_manager.tile_size
 
 	_update_algo_label()
+	_update_player_stats_hud()
 	_update_debug_hud()
-	info_label.text = "Infernal Affairs - Tahap 3  |  [Tab/1/2] Algo A*/UCS  |  [R] Reset  [F3] Debug"
+	info_label.text = "Infernal Affairs - Tahap 3  |  [L] Cheat Lv-Up  |  [K] Auto-Lv  |  [Tab] A*/UCS  |  [F3] Debug  |  [R] Reset"
 
 func _on_grid_updated() -> void:
 	arena_map.build_map(grid_manager)
@@ -407,6 +432,8 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 	player.is_active = false
 	if demon:
 		demon.is_active = false
+	if is_instance_valid(player_hud_panel):
+		player_hud_panel.visible = false
 
 	var overlay = PreBattleLoadingOverlay.new()
 	var enemy_title = "Hell Guard (%s)" % csp_result.get("guard_type", "Hell Knight") if type == "guard" else "Demon Lord (%s)" % csp_result.get("boss_weapon", "Flame Sword")
@@ -451,6 +478,9 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 		player.is_active = true
 		if demon and not GameState.boss_defeated:
 			demon.is_active = true
+		if is_instance_valid(player_hud_panel):
+			player_hud_panel.visible = true
+			_update_player_stats_hud()
 		encounter_cooldown = 1.0
 	)
 
@@ -461,6 +491,8 @@ func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> vo
 	player.is_active = false
 	if demon:
 		demon.is_active = false
+	if is_instance_valid(player_hud_panel):
+		player_hud_panel.visible = false
 
 	if is_instance_valid(battle_hud):
 		battle_hud.queue_free()
@@ -474,6 +506,9 @@ func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> vo
 		player.is_active = true
 		if demon and not GameState.boss_defeated:
 			demon.is_active = true
+		if is_instance_valid(player_hud_panel):
+			player_hud_panel.visible = true
+			_update_player_stats_hud()
 		encounter_cooldown = ENCOUNTER_COOLDOWN_TIME
 		on_finished_cb.call(winner)
 		_update_debug_hud()
@@ -537,16 +572,14 @@ func _show_floating_alert(text: String, color: Color = Color.WHITE) -> void:
 	)
 
 # ---------------------------------------------------------------
-# DEBUG HUD (F3 to toggle)
+# DEBUG HUD (F3 to toggle - Positioned Bottom-Right)
 # ---------------------------------------------------------------
 func _build_debug_hud() -> void:
 	debug_panel = PanelContainer.new()
 	debug_panel.name = "DebugPanel"
-	debug_panel.anchors_preset = Control.PRESET_BOTTOM_LEFT
-	debug_panel.offset_left = 10
-	debug_panel.offset_bottom = -10
-	debug_panel.offset_top = -390
-	debug_panel.offset_right = 330
+	$CanvasLayer.add_child(debug_panel)
+	debug_panel.visible = false
+	debug_panel.z_index = 20
 
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.05, 0.03, 0.08, 0.88)
@@ -608,7 +641,7 @@ func _build_debug_hud() -> void:
 	)
 
 	_add_debug_btn(btn_grid, "Re-solve CSP", func():
-		csp_result = csp_solver.solve(true, true, true)
+		csp_result = csp_solver.solve(true, true, true, true)
 		GameState.gate_req_level = csp_result.get("gate_req", 2)
 		_show_floating_alert("CSP Baru: Guard=%s, Boss=%s (Syarat: Lvl %d)" % [
 			csp_result.get("guard_type", ""), csp_result.get("boss_weapon", ""), csp_result.get("gate_req", 2)
@@ -616,11 +649,20 @@ func _build_debug_hud() -> void:
 		_update_debug_hud()
 	)
 
+	_add_debug_btn(btn_grid, "Set: Fire Shaman", func():
+		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Fire Shaman"})
+		GameState.gate_req_level = csp_result.get("gate_req", 2)
+		_show_floating_alert("Guard diset ke: Fire Shaman! (Boss Weapon: %s)" % csp_result.get("boss_weapon", ""), Color(1.0, 0.5, 0.2))
+		_update_debug_hud()
+	)
+
 	_add_debug_btn(btn_grid, "Test Balancer", func():
 		_open_pre_battle_overlay("guard", guard_entity)
 	)
 
-	$CanvasLayer.add_child(debug_panel)
+	_add_debug_btn(btn_grid, "Auto-Lv Cheat", func():
+		_toggle_cheat_auto_level()
+	)
 
 func _add_debug_btn(parent: Node, text: String, callback: Callable) -> void:
 	var btn = Button.new()
@@ -648,7 +690,7 @@ func _update_debug_hud() -> void:
 
 	var csp_g: String = "%s (%s)" % [csp_result.get("guard_type", "-"), csp_result.get("guard_element", "-")]
 	var csp_b: String = "%s (%s)" % [csp_result.get("boss_weapon", "-"), csp_result.get("boss_element", "-")]
-	debug_label.text += "\n[color=yellow]â”€â”€ CSP Assignment â”€â”€[/color]\nGuard: [color=cyan]%s[/color]\nBoss: [color=red]%s[/color]\nGate Req: [color=yellow]Lvl %d[/color] | Potions: %d\n[color=gray]Checks: %d (%0.2f ms)[/color]" % [
+	debug_label.text += "\n[color=yellow]-- CSP Assignment --[/color]\nGuard: [color=cyan]%s[/color]\nBoss: [color=red]%s[/color]\nGate Req: [color=yellow]Lvl %d[/color] | Potions: %d\n[color=gray]Checks: %d (%0.2f ms)[/color]" % [
 		csp_g, csp_b, csp_result.get("gate_req", 2), csp_result.get("castle_potions", 3),
 		csp_result.get("consistency_checks", 0), csp_result.get("time_ms", 0.0)
 	]
@@ -689,6 +731,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_TAB: _toggle_algorithm()
 			KEY_1:   _set_algorithm("astar")
 			KEY_2:   _set_algorithm("ucs")
+			KEY_L, KEY_C:
+				_cheat_level_up()
+			KEY_K:
+				_toggle_cheat_auto_level()
 			KEY_F3:
 				debug_visible = not debug_visible
 				if debug_panel:
@@ -719,9 +765,231 @@ func _physics_process(delta: float) -> void:
 	if encounter_cooldown > 0.0:
 		encounter_cooldown = maxf(0.0, encounter_cooldown - delta)
 
+	# Auto-level up cheat: ensures player level is always at least gate requirement
+	if cheat_auto_level_enabled and GameState.level < GameState.gate_req_level:
+		_cheat_level_up()
+
 	# Camera smooth follow
 	if player and camera:
 		camera.position = camera.position.lerp(player.position, 0.08)
+
+# ---------------------------------------------------------------
+# PLAYER STATS HUD (BOTTOM-LEFT CORNER)
+# ---------------------------------------------------------------
+func _build_player_stats_hud() -> void:
+	player_hud_panel = PanelContainer.new()
+	player_hud_panel.name = "PlayerStatsHUD"
+	$CanvasLayer.add_child(player_hud_panel)
+	player_hud_panel.z_index = 15
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.03, 0.08, 0.92)
+	style.border_color = Color(0.0, 0.85, 0.75, 0.85)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(8)
+	player_hud_panel.add_theme_stylebox_override("panel", style)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 10)
+	player_hud_panel.add_child(hbox)
+
+	# Left Column: Avatar + Level Badge
+	var left_vbox := VBoxContainer.new()
+	left_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	left_vbox.add_theme_constant_override("separation", 4)
+	hbox.add_child(left_vbox)
+
+	hud_avatar_rect = TextureRect.new()
+	var p_tex = load("res://assets/sprites/characters/player/player_avatar.png")
+	if p_tex:
+		hud_avatar_rect.texture = p_tex
+	hud_avatar_rect.custom_minimum_size = Vector2(46, 46)
+	hud_avatar_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hud_avatar_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	left_vbox.add_child(hud_avatar_rect)
+
+	hud_level_badge = Label.new()
+	hud_level_badge.text = "LV. 1"
+	hud_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hud_level_badge.add_theme_font_size_override("font_size", 11)
+	hud_level_badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	var badge_s := StyleBoxFlat.new()
+	badge_s.bg_color = Color(0.12, 0.08, 0.2, 0.9)
+	badge_s.border_color = Color(1.0, 0.8, 0.2, 0.8)
+	badge_s.set_border_width_all(1)
+	badge_s.set_corner_radius_all(4)
+	badge_s.set_content_margin_all(2)
+	hud_level_badge.add_theme_stylebox_override("panel", badge_s)
+	left_vbox.add_child(hud_level_badge)
+
+	# Right Column: Bars and Stats
+	var right_vbox := VBoxContainer.new()
+	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_vbox.add_theme_constant_override("separation", 3)
+	hbox.add_child(right_vbox)
+
+	# Row 1: Player Name + Cheat Buttons
+	var r1 := HBoxContainer.new()
+	right_vbox.add_child(r1)
+
+	var p_name := Label.new()
+	p_name.text = "LOST SOUL KNIGHT"
+	p_name.add_theme_font_size_override("font_size", 11)
+	p_name.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
+	p_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r1.add_child(p_name)
+
+	hud_auto_btn = Button.new()
+	hud_auto_btn.text = "Auto-Lv: OFF"
+	hud_auto_btn.tooltip_text = "Toggle Auto Level-Up Cheat (Shortcut: K)"
+	hud_auto_btn.add_theme_font_size_override("font_size", 9)
+	hud_auto_btn.custom_minimum_size = Vector2(75, 20)
+	hud_auto_btn.pressed.connect(_toggle_cheat_auto_level)
+	r1.add_child(hud_auto_btn)
+
+	hud_cheat_btn = Button.new()
+	hud_cheat_btn.text = "⚡ +LV [L]"
+	hud_cheat_btn.tooltip_text = "Cheat Instant Level Up (Shortcut: L)"
+	hud_cheat_btn.add_theme_font_size_override("font_size", 9)
+	hud_cheat_btn.custom_minimum_size = Vector2(62, 20)
+	var cheat_s := StyleBoxFlat.new()
+	cheat_s.bg_color = Color(0.85, 0.45, 0.05, 0.95)
+	cheat_s.set_corner_radius_all(4)
+	hud_cheat_btn.add_theme_stylebox_override("normal", cheat_s)
+	hud_cheat_btn.pressed.connect(_cheat_level_up)
+	r1.add_child(hud_cheat_btn)
+
+	# Row 2: HP Bar
+	var hp_box := HBoxContainer.new()
+	right_vbox.add_child(hp_box)
+	hud_hp_bar = ProgressBar.new()
+	hud_hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hud_hp_bar.custom_minimum_size = Vector2(0, 11)
+	hud_hp_bar.show_percentage = false
+	var hp_s := StyleBoxFlat.new()
+	hp_s.bg_color = Color(0.0, 0.85, 0.5, 0.9)
+	hp_s.set_corner_radius_all(3)
+	hud_hp_bar.add_theme_stylebox_override("fill", hp_s)
+	hp_box.add_child(hud_hp_bar)
+
+	hud_hp_label = Label.new()
+	hud_hp_label.text = "100/100"
+	hud_hp_label.add_theme_font_size_override("font_size", 10)
+	hud_hp_label.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
+	hp_box.add_child(hud_hp_label)
+
+	# Row 3: EXP Bar
+	var exp_box := HBoxContainer.new()
+	right_vbox.add_child(exp_box)
+	hud_exp_bar = ProgressBar.new()
+	hud_exp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hud_exp_bar.custom_minimum_size = Vector2(0, 8)
+	hud_exp_bar.show_percentage = false
+	var exp_s := StyleBoxFlat.new()
+	exp_s.bg_color = Color(0.65, 0.25, 0.95, 0.9)
+	exp_s.set_corner_radius_all(3)
+	hud_exp_bar.add_theme_stylebox_override("fill", exp_s)
+	exp_box.add_child(hud_exp_bar)
+
+	hud_exp_label = Label.new()
+	hud_exp_label.text = "EXP: 0/100"
+	hud_exp_label.add_theme_font_size_override("font_size", 9)
+	hud_exp_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
+	exp_box.add_child(hud_exp_label)
+
+	# Row 4: Stats Badges
+	hud_stats_label = Label.new()
+	hud_stats_label.text = "⚔️ Atk: 12  🛡️ Def: 5  🧪 Pot: 1"
+	hud_stats_label.add_theme_font_size_override("font_size", 10)
+	hud_stats_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+	right_vbox.add_child(hud_stats_label)
+
+	# Row 5: Key Badge
+	hud_key_badge = Label.new()
+	hud_key_badge.text = "🔑 Castle Key: [Belum Didapat]"
+	hud_key_badge.add_theme_font_size_override("font_size", 9)
+	hud_key_badge.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	right_vbox.add_child(hud_key_badge)
+
+	_update_player_stats_hud()
+	_reposition_hud_panels()
+
+func _reposition_hud_panels() -> void:
+	var vp := get_viewport()
+	if not vp:
+		return
+	var vp_size: Vector2 = vp.get_visible_rect().size
+
+	if is_instance_valid(player_hud_panel):
+		var hud_w: float = 380.0
+		var hud_h: float = 145.0
+		player_hud_panel.custom_minimum_size = Vector2(hud_w, hud_h)
+		player_hud_panel.size = Vector2(hud_w, hud_h)
+		player_hud_panel.position = Vector2(16.0, maxf(16.0, vp_size.y - hud_h - 16.0))
+
+	if is_instance_valid(debug_panel):
+		var dbg_w: float = 340.0
+		var dbg_h: float = 420.0
+		debug_panel.custom_minimum_size = Vector2(dbg_w, dbg_h)
+		debug_panel.size = Vector2(dbg_w, dbg_h)
+		debug_panel.position = Vector2(maxf(16.0, vp_size.x - dbg_w - 16.0), maxf(16.0, vp_size.y - dbg_h - 16.0))
+
+func _update_player_stats_hud() -> void:
+	if not is_instance_valid(player_hud_panel):
+		return
+
+	# Only visible when not in battle
+	player_hud_panel.visible = not is_in_battle
+	if player_hud_panel.visible:
+		_reposition_hud_panels()
+
+	var s: Dictionary = GameState.get_status_summary()
+	if hud_level_badge:
+		hud_level_badge.text = "LV. %d" % s.level
+	if hud_hp_bar:
+		hud_hp_bar.max_value = float(s.max_hp)
+		hud_hp_bar.value = float(s.hp)
+	if hud_hp_label:
+		hud_hp_label.text = "%d/%d" % [s.hp, s.max_hp]
+	if hud_exp_bar:
+		hud_exp_bar.max_value = float(s.exp_needed)
+		hud_exp_bar.value = float(s.exp) if s.level < GameState.MAX_LEVEL else float(s.exp_needed)
+	if hud_exp_label:
+		hud_exp_label.text = "EXP: %d/%d" % [s.exp, s.exp_needed] if s.level < GameState.MAX_LEVEL else "MAX LEVEL"
+	if hud_stats_label:
+		hud_stats_label.text = "⚔️ Atk: %d  🛡️ Def: %d  🧪 Pot: %d" % [s.attack, s.defense, s.potions]
+	if hud_key_badge:
+		if s.has_key:
+			hud_key_badge.text = "🔑 Castle Key: [ACQUIRED!]"
+			hud_key_badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+		else:
+			hud_key_badge.text = "🔑 Castle Key: [Kunci Istana Terkunci]"
+			hud_key_badge.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+
+# ---------------------------------------------------------------
+# CHEAT LEVEL-UP (INSTANT & AUTO)
+# ---------------------------------------------------------------
+func _cheat_level_up() -> void:
+	var prev_lvl: int = GameState.level
+	GameState.cheat_level_up()
+	_play_sfx(sfx_level_up)
+	if GameState.level > prev_lvl:
+		_show_floating_alert("⚡ CHEAT LEVEL UP! Player sekarang Level %d! (+Full HP & Stat Boost)" % GameState.level, Color(1.0, 0.85, 0.1))
+	else:
+		_show_floating_alert("⚡ PLAYER MAX LEVEL (Level 3)! HP dipulihkan & Potion terisi!", Color(0.2, 1.0, 0.5))
+	_update_player_stats_hud()
+	_update_debug_hud()
+
+func _toggle_cheat_auto_level() -> void:
+	cheat_auto_level_enabled = not cheat_auto_level_enabled
+	if hud_auto_btn:
+		hud_auto_btn.text = "Auto-Lv: ON" if cheat_auto_level_enabled else "Auto-Lv: OFF"
+		hud_auto_btn.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5) if cheat_auto_level_enabled else Color(0.8, 0.8, 0.8))
+	var status_text = "DIAKTIFKAN (Auto memenuhi syarat gerbang)" if cheat_auto_level_enabled else "DINONAKTIFKAN"
+	_show_floating_alert("⚡ Cheat Auto Level-Up %s!" % status_text, Color(1.0, 0.7, 0.2))
+	if cheat_auto_level_enabled and GameState.level < GameState.gate_req_level:
+		_cheat_level_up()
 
 # ---------------------------------------------------------------
 # HOOKS FOR TURN-BASED BATTLE

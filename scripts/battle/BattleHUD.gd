@@ -1,18 +1,18 @@
 ## BattleHUD.gd
-## â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+## ------------------------------------------------------------------------------
 ## Premium Battle HUD with:
 ## 1. Procedural Action & Waiting Animations (Tween + VFX + Floating Damage)
 ## 2. Dedicated Combat Stage Frame (Unobstructed duel view)
 ## 3. Modular External Debug Sidebar (Organized into structured sub-boxes)
-## â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+## ------------------------------------------------------------------------------
 class_name BattleHUD
 extends CanvasLayer
 
 signal battle_hud_closed(winner: String)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # CONSTANTS & ASSETS
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 const TEX_PLAYER_PORTRAIT := "res://assets/sprites/characters/player/player_portrait.png"
 const TEX_PLAYER_AVATAR   := "res://assets/sprites/characters/player/player_avatar.png"
 const TEX_DEMON_AVATAR    := "res://assets/sprites/characters/demon/demon_avatar.png"
@@ -26,9 +26,9 @@ const TEX_ICON_SHIELD     := "res://assets/sprites/ui/skills/icon_shield.png"
 const TEX_ICON_POTION     := "res://assets/sprites/ui/skills/icon_potion.png"
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # REFERENCES
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 var _manager: BattleManager
 
 # Main Layout
@@ -130,9 +130,9 @@ var _exp_visible: bool = false
 # Action History
 var _action_history: Array[String] = []
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # INITIALIZATION
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func init(manager: BattleManager) -> void:
 	_manager = manager
 	_manager.battle_started.connect(_on_battle_started)
@@ -152,9 +152,9 @@ func _ready() -> void:
 	if is_instance_valid(_combat_stage) and not _combat_stage.resized.is_connected(_update_positions):
 		_combat_stage.resized.connect(_update_positions)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # UI BUILD
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _build_ui() -> void:
 	# Full screen overlay
 	_root_container = MarginContainer.new()
@@ -187,9 +187,9 @@ func _build_ui() -> void:
 	# 2. Right Column: Dedicated Modular Debug Sidebar
 	_build_debug_sidebar()
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # 1. HEADER & HP SECTION
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _build_header_and_hp() -> void:
 	var header_panel := PanelContainer.new()
 	var h_style := StyleBoxFlat.new()
@@ -213,7 +213,7 @@ func _build_header_and_hp() -> void:
 	main_vbox.add_child(top_row)
 
 	var title := Label.new()
-	title.text = "INFERNAL DUEL  â€¢  TURN-BASED COMBAT"
+	title.text = "INFERNAL DUEL   |   TURN-BASED COMBAT"
 	title.add_theme_font_size_override("font_size", 13)
 	title.add_theme_color_override("font_color", Color(1.0, 0.45, 0.2))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -334,9 +334,9 @@ func _build_header_and_hp() -> void:
 	_npc_hp_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.25))
 	d_sub.add_child(_npc_hp_label)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # 2. COMBAT STAGE (UNOBSTRUCTED ACTION ARENA)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _build_combat_stage() -> void:
 	_combat_stage_panel = PanelContainer.new()
 	_combat_stage_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -425,9 +425,9 @@ func _build_combat_stage() -> void:
 	_vfx_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_combat_stage.add_child(_vfx_layer)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # 3. COMBAT CONTROLS (BUTTONS & TIPS)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _build_controls() -> void:
 	var ctrl_panel := PanelContainer.new()
 	var c_style := StyleBoxFlat.new()
@@ -451,7 +451,7 @@ func _build_controls() -> void:
 	vbox.add_child(tip_row)
 
 	_turn_label = Label.new()
-	_turn_label.text = "YOUR TURN â€” Select an action:"
+	_turn_label.text = "YOUR TURN  -  Select an action:"
 	_turn_label.add_theme_font_size_override("font_size", 12)
 	_turn_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
 	tip_row.add_child(_turn_label)
@@ -493,9 +493,9 @@ func _build_controls() -> void:
 	helper_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(helper_lbl)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # 4. MODULAR DEBUG SIDEBAR (OUTSIDE COMBAT FRAME, MULTIPLE SUB-BOXES)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _build_debug_sidebar() -> void:
 	_debug_sidebar = PanelContainer.new()
 	_debug_sidebar.custom_minimum_size = Vector2(330, 0)
@@ -544,7 +544,7 @@ func _build_debug_sidebar() -> void:
 	boxes_vbox.add_theme_constant_override("separation", 6)
 	scroll.add_child(boxes_vbox)
 
-	# â”€â”€ KOTAK 1: AI Engine & Configuration â”€â”€
+	# -- KOTAK 1: AI Engine & Configuration --
 	var cfg_data := _make_subbox(" AI Engine & Search Config", Color(0.3, 0.2, 0.6))
 	_box_config = cfg_data["panel"] as PanelContainer
 	var cfg_vbox := cfg_data["content"] as VBoxContainer
@@ -554,7 +554,7 @@ func _build_debug_sidebar() -> void:
 	_lbl_depth = _make_stat_row("Lookahead Depth:", "3 Plies (Balanced)", Color(0.9, 0.6, 1.0), cfg_vbox)
 	_lbl_order = _make_stat_row("Action Ordering:", "Default Heuristic", Color(0.8, 0.8, 0.8), cfg_vbox)
 
-	# â”€â”€ KOTAK 2: Search Performance & Tree Stats â”€â”€
+	# -- KOTAK 2: Search Performance & Tree Stats --
 	var perf_data := _make_subbox(" Tree Search Performance", Color(0.15, 0.35, 0.65))
 	_box_perf = perf_data["panel"] as PanelContainer
 	var perf_vbox := perf_data["content"] as VBoxContainer
@@ -570,14 +570,14 @@ func _build_debug_sidebar() -> void:
 	_lbl_efficiency = _make_metric_card("Prune Ratio", "0%", Color(0.2, 0.95, 0.5), grid)
 	_lbl_max_depth  = _make_metric_card("Max Depth", "0", Color(1.0, 0.85, 0.2), grid)
 
-	# â”€â”€ KOTAK 3: Evaluated Actions & Decision Scores â”€â”€
+	# -- KOTAK 3: Evaluated Actions & Decision Scores --
 	var act_data := _make_subbox(" Candidate Action Utilities (NPC)", Color(0.65, 0.25, 0.15))
 	_box_actions = act_data["panel"] as PanelContainer
 	_actions_vbox = act_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_actions)
 	_build_action_score_idle()
 
-	# â”€â”€ KOTAK 4: Combat State Assessment â”€â”€
+	# -- KOTAK 4: Combat State Assessment --
 	var st_data := _make_subbox(" Strategic State Assessment", Color(0.2, 0.45, 0.35))
 	_box_state = st_data["panel"] as PanelContainer
 	var st_vbox := st_data["content"] as VBoxContainer
@@ -585,7 +585,7 @@ func _build_debug_sidebar() -> void:
 	_lbl_advantage = _make_stat_row("Advantage:", "Even Match (0 HP)", Color(0.8, 0.8, 0.8), st_vbox)
 	_lbl_threat    = _make_stat_row("Threat Level:", "Moderate", Color(1.0, 0.8, 0.2), st_vbox)
 
-	# â”€â”€ KOTAK 5: Action History â”€â”€
+	# -- KOTAK 5: Action History --
 	var hist_data := _make_subbox(" Recent Turns Log", Color(0.25, 0.25, 0.35))
 	_box_history = hist_data["panel"] as PanelContainer
 	var hist_vbox := hist_data["content"] as VBoxContainer
@@ -595,12 +595,12 @@ func _build_debug_sidebar() -> void:
 	_lbl_history.fit_content = true
 	_lbl_history.scroll_active = false
 	_lbl_history.add_theme_font_size_override("normal_font_size", 9)
-	_lbl_history.text = "[color=#666]Duel started. Awaiting actionsâ€¦[/color]"
+	_lbl_history.text = "[color=#666]Duel started. Awaiting actions...[/color]"
 	hist_vbox.add_child(_lbl_history)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # 5. EXPERIMENT PANEL (HEADLESS BENCHMARK & ALGO LAB)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _build_experiment_panel() -> void:
 	_exp_panel = PanelContainer.new()
 	_exp_panel.name = "ExpPanel"
@@ -745,9 +745,9 @@ func _build_experiment_panel() -> void:
 	_exp_log.text = "[color=#ffcc00][b]Tekan tombol [Run Full Automated Benchmark] di atas.[/b][/color]\n[color=#888]Sistem akan menjalankan simulasi headless (Minimax vs Alpha-Beta, evaluasi fungsi, ordering, dan perbandingan depth).\nHasil pengujian dapat di-scroll dengan mouse wheel dan disalin langsung via [Copy to Clipboard].[/color]"
 	log_box.add_child(_exp_log)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # PROCEDURAL ANIMATION LOOP (WAITING / BREATHING MODE)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _process(delta: float) -> void:
 	_idle_time += delta
 
@@ -787,9 +787,9 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_demon_node) and not _demon_animating:
 		_demon_node.position = _demon_base_pos
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # POSITION & RESPONSIVENESS
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _update_positions() -> void:
 	if not is_instance_valid(_combat_stage):
 		return
@@ -808,9 +808,9 @@ func _update_positions() -> void:
 	if is_instance_valid(_demon_node) and not _demon_animating:
 		_demon_node.position = _demon_base_pos
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # ACTION ANIMATION DISPATCHER (OPSI B)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _execute_player_choice(action: int) -> void:
 	if _is_busy_animating:
 		return
@@ -950,9 +950,9 @@ func _on_animation_finished(is_player: bool, new_state: BattleState) -> void:
 			_set_buttons_enabled(true)
 			_show_player_tip()
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # FLOATING COMBAT TEXT & SHAKE VFX
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _spawn_floating_text(text: String, pos: Vector2, color: Color, is_crit: bool) -> void:
 	if not is_instance_valid(_vfx_layer):
 		return
@@ -982,12 +982,12 @@ func _shake_combat_stage(intensity: float = 6.0, duration: float = 0.22) -> void
 		tw.tween_property(_combat_stage, "position", offset, step_time)
 	tw.tween_property(_combat_stage, "position", Vector2.ZERO, step_time)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # TURN & STATE SIGNALS
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _on_turn_changed(whose_turn: String) -> void:
 	if whose_turn == "player":
-		_turn_label.text = "YOUR TURN â€” Select an action:"
+		_turn_label.text = "YOUR TURN  -  Select an action:"
 		_turn_label.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
 		if is_instance_valid(_player_turn_badge): _player_turn_badge.visible = true
 		if is_instance_valid(_demon_turn_badge):  _demon_turn_badge.visible  = false
@@ -1038,7 +1038,7 @@ func _on_battle_started(state: BattleState) -> void:
 			_demon_sprite.texture = stex
 
 	_refresh_state_data(state)
-	_turn_label.text = "YOUR TURN â€” Select an action:"
+	_turn_label.text = "YOUR TURN  -  Select an action:"
 	_show_player_tip()
 	_refresh_debug_config()
 	_build_action_score_idle()
@@ -1078,9 +1078,9 @@ func _on_battle_ended(winner: String, final_state: BattleState) -> void:
 		)
 		_combat_column.add_child(_btn_return)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # STATE REFRESH & SMOOTH HP TRANSITION
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _smooth_refresh_hp(state: BattleState) -> void:
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_player_hp_bar, "value", float(state.player_hp), 0.35).set_trans(Tween.TRANS_QUAD)
@@ -1102,9 +1102,26 @@ func _refresh_state_data(state: BattleState) -> void:
 	_npc_hp_label.text    = "HP: %d / %d" % [state.npc_hp,    state.npc_max_hp]
 	_player_pot_label.text = "Potions: %d/3" % state.player_potions
 	_npc_pot_label.text    = "Potions: %d/3" % state.npc_potions
-
+	_refresh_action_buttons(state)
 	_refresh_defending_badges(state)
 	_update_strategic_assessment(state)
+
+func _refresh_action_buttons(state: BattleState) -> void:
+	if not is_instance_valid(state):
+		return
+	if is_instance_valid(_btn_attack):
+		_btn_attack.text = "[1] Attack\n[%d DMG]" % state.player_atk_dmg
+	if is_instance_valid(_btn_heavy):
+		_btn_heavy.text = "[2] Heavy\n[%d DMG, -10]" % state.player_heavy_dmg
+	if is_instance_valid(_btn_defend):
+		_btn_defend.text = "[3] Defend\n[Block 50%]"
+	if is_instance_valid(_btn_potion):
+		if state.player_potions > 0:
+			_btn_potion.text = "[4] Potion (%d/3)\n[+%d HP]" % [state.player_potions, state.player_potion_heal]
+			_btn_potion.disabled = false
+		else:
+			_btn_potion.text = "[4] Potion (0/3)\n[Empty]"
+			_btn_potion.disabled = true
 
 func _refresh_defending_badges(state: BattleState) -> void:
 	if is_instance_valid(_player_def_badge):
@@ -1133,9 +1150,9 @@ func _show_player_tip() -> void:
 		tip = " Serang terus. Manfaatkan saat Demon tidak dalam posisi Defend."
 	_status_label.text = tip
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # DEBUG SIDEBAR UPDATER (MODULAR SUB-BOXES)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _toggle_debug_sidebar() -> void:
 	_debug_visible = not _debug_visible
 	_debug_sidebar.visible = _debug_visible
@@ -1274,7 +1291,7 @@ func _build_action_score_idle() -> void:
 	for c in _actions_vbox.get_children():
 		c.queue_free()
 	var placeholder := Label.new()
-	placeholder.text = "Scores will appear during Demon's turnâ€¦"
+	placeholder.text = "Scores will appear during Demon's turn..."
 	placeholder.add_theme_font_size_override("font_size", 9)
 	placeholder.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
 	_actions_vbox.add_child(placeholder)
@@ -1290,7 +1307,7 @@ func _update_strategic_assessment(s: BattleState) -> void:
 		_lbl_advantage.text = "Player (+%d HP Lead)" % (-hp_diff)
 		_lbl_advantage.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
 	else:
-		_lbl_advantage.text = "Even Match (Î”%d HP)" % hp_diff
+		_lbl_advantage.text = "Even Match (Delta %d HP)" % hp_diff
 		_lbl_advantage.add_theme_color_override("font_color", Color(0.9, 0.9, 0.4))
 
 	if s.npc_hp <= 30:
@@ -1329,9 +1346,9 @@ func _update_action_history_log(actor: String, result: Dictionary) -> void:
 	if is_instance_valid(_lbl_history):
 		_lbl_history.text = "\n".join(_action_history)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # EXPERIMENT RUNNER & CONTROLS
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _toggle_experiment_panel() -> void:
 	_exp_visible = not _exp_visible
 	_exp_panel.visible = _exp_visible
@@ -1359,9 +1376,9 @@ func _run_experiment() -> void:
 	_exp_log.text = results
 	_exp_log.scroll_to_line(0)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # INPUT SHORTCUTS
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
@@ -1396,9 +1413,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_V:
 			if _manager: _manager.ai_action_order = MinimaxSolver.ActionOrder.RANDOM; _refresh_debug_config()
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # WIDGET & FACTORY HELPERS
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 func _make_subbox(title: String, border_color: Color) -> Dictionary:
 	var box := PanelContainer.new()
 	var box_style := StyleBoxFlat.new()

@@ -134,7 +134,7 @@ func _build_ui() -> void:
 	_enemy_subtitle_label = Label.new()
 	var elem_info: String = " (%s)" % enemy_element if enemy_element.length() > 0 else ""
 	var wep_info: String = " [Senjata: %s]" % enemy_weapon if enemy_weapon.length() > 0 else ""
-	_enemy_subtitle_label.text = "Target: %s%s%s  â€¢  Target Power Ratio: %.2fx" % [enemy_name, elem_info, wep_info, target_ratio]
+	_enemy_subtitle_label.text = "Target: %s%s%s   |   Target Power Ratio: %.2fx" % [enemy_name, elem_info, wep_info, target_ratio]
 	_enemy_subtitle_label.add_theme_font_size_override("font_size", 12)
 	_enemy_subtitle_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.95))
 	title_vbox.add_child(_enemy_subtitle_label)
@@ -290,7 +290,7 @@ func _build_ui() -> void:
 	comp_vbox.add_child(comp_title)
 
 	var comp_sub := Label.new()
-	comp_sub.text = "Awal (S_0)  â†’  Optimal (S*)"
+	comp_sub.text = "Awal (S_0)  ->  Optimal (S*)"
 	comp_sub.add_theme_font_size_override("font_size", 10)
 	comp_sub.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
 	comp_vbox.add_child(comp_sub)
@@ -312,7 +312,7 @@ func _build_ui() -> void:
 	_lbl_depth_comp = _add_stat_row(_stat_grid, "Minimax Depth:")
 
 	var note_lbl := Label.new()
-	note_lbl.text = "âœ“ Menjamin win-rate ~55%\nâœ“ Durasi pertempuran 5-7 turn\nâœ“ Dinamis sesuai level & HP player"
+	note_lbl.text = "[OK] Menjamin win-rate ~55%\n[OK] Durasi pertempuran 5-7 turn\n[OK] Dinamis sesuai level & HP player"
 	note_lbl.add_theme_font_size_override("font_size", 10)
 	note_lbl.add_theme_color_override("font_color", Color(0.3, 0.9, 0.6))
 	comp_vbox.add_child(note_lbl)
@@ -392,16 +392,21 @@ func _run_optimization() -> void:
 	var p_def: int = player_stats.get("defense", 5)
 	var player_power: float = LocalSearchBalancer.calculate_player_power(p_hp, p_atk, p_def, p_pot)
 
-	var s0: Dictionary = LocalSearchBalancer.get_initial_state(enemy_type)
+	var bounds: Dictionary = LocalSearchBalancer.get_domain_bounds(player_stats, player_power)
+	var s0: Dictionary = LocalSearchBalancer.get_initial_state(enemy_type, player_stats)
 
 	if current_algo == "sa":
 		_algo_btn.text = "Algoritma: Simulated Annealing (Klik to Swap)"
 		_algo_btn.add_theme_color_override("font_color", Color(0.2, 1.0, 0.6))
-		balancer_result = LocalSearchBalancer.run_simulated_annealing(s0, player_power, target_ratio, 50)
-	else:
-		_algo_btn.text = "Algoritma: Hill Climbing (Klik to Swap)"
+		balancer_result = LocalSearchBalancer.run_simulated_annealing(s0, player_power, target_ratio, 50, bounds)
+	elif current_algo == "hc":
+		_algo_btn.text = "Algoritma: Steepest-Ascent Hill Climbing (Klik to Swap)"
 		_algo_btn.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))
-		balancer_result = LocalSearchBalancer.run_hill_climbing(s0, player_power, target_ratio, 35)
+		balancer_result = LocalSearchBalancer.run_hill_climbing(s0, player_power, target_ratio, 35, bounds)
+	else: # "rr"
+		_algo_btn.text = "Algoritma: Hill Climbing + Random Restart (Klik to Swap)"
+		_algo_btn.add_theme_color_override("font_color", Color(0.3, 0.8, 1.0))
+		balancer_result = LocalSearchBalancer.run_hill_climbing_random_restart(s0, player_power, target_ratio, 3, 20, bounds)
 
 	step_logs = balancer_result.get("step_logs", [])
 	current_step_idx = 0
@@ -482,7 +487,7 @@ func _display_final_results() -> void:
 	_lbl_fitness_score.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
 	_lbl_npc_power.text = "NPC Power: %.1f (Optimal)" % balancer_result.get("final_npc_power", 0.0)
 
-	var summary_msg := "\n[color=#00f5d4][b]âœ” OPTIMASI SELESAI (%s):[/b][/color] Total %d langkah dalam %.2f ms. Keseimbangan pertempuran tercapai!\n" % [
+	var summary_msg := "\n[color=#00f5d4][b][OK] OPTIMASI SELESAI (%s):[/b][/color] Total %d langkah dalam %.2f ms. Keseimbangan pertempuran tercapai!\n" % [
 		balancer_result.get("algorithm", ""),
 		balancer_result.get("total_steps", 0),
 		balancer_result.get("execution_time_ms", 0.0)
@@ -491,31 +496,36 @@ func _display_final_results() -> void:
 
 func _update_comparison_labels(init_s: Dictionary, curr_s: Dictionary) -> void:
 	if _lbl_hp_comp:
-		_lbl_hp_comp.text = "%d  â†’  %d HP" % [init_s.get("hp", 0), curr_s.get("hp", 0)]
+		_lbl_hp_comp.text = "%d  ->  %d HP" % [init_s.get("hp", 0), curr_s.get("hp", 0)]
 	if _lbl_atk_comp:
-		_lbl_atk_comp.text = "%d  â†’  %d DMG" % [init_s.get("atk", 0), curr_s.get("atk", 0)]
+		_lbl_atk_comp.text = "%d  ->  %d DMG" % [init_s.get("atk", 0), curr_s.get("atk", 0)]
 	if _lbl_heavy_comp:
-		_lbl_heavy_comp.text = "%d  â†’  %d DMG" % [init_s.get("heavy_atk", 0), curr_s.get("heavy_atk", 0)]
+		_lbl_heavy_comp.text = "%d  ->  %d DMG" % [init_s.get("heavy_atk", 0), curr_s.get("heavy_atk", 0)]
 	if _lbl_def_comp:
-		_lbl_def_comp.text = "%d  â†’  %d DEF" % [init_s.get("def", 0), curr_s.get("def", 0)]
+		_lbl_def_comp.text = "%d  ->  %d DEF" % [init_s.get("def", 0), curr_s.get("def", 0)]
 	if _lbl_pot_comp:
-		_lbl_pot_comp.text = "%d pot  â†’  %d pot (+%d)" % [
+		_lbl_pot_comp.text = "%d pot  ->  %d pot (+%d)" % [
 			init_s.get("potion_count", 0), curr_s.get("potion_count", 0), curr_s.get("potion_heal", 25)
 		]
 	if _lbl_depth_comp:
-		_lbl_depth_comp.text = "Depth %d  â†’  Depth %d" % [
+		_lbl_depth_comp.text = "Depth %d  ->  Depth %d" % [
 			init_s.get("minimax_depth", 2), curr_s.get("minimax_depth", 2)
 		]
 
 func _toggle_algorithm() -> void:
-	current_algo = "hc" if current_algo == "sa" else "sa"
+	if current_algo == "sa":
+		current_algo = "hc"
+	elif current_algo == "hc":
+		current_algo = "rr"
+	else:
+		current_algo = "sa"
 	_run_optimization()
 
 func _on_proceed_pressed() -> void:
 	# Ensure final state is used
 	var best_s: Dictionary = balancer_result.get("best_state", {})
 	if best_s.is_empty():
-		best_s = LocalSearchBalancer.get_initial_state(enemy_type)
+		best_s = LocalSearchBalancer.get_initial_state(enemy_type, player_stats)
 
 	var config := {
 		"enemy_type": enemy_type,

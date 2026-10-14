@@ -30,6 +30,8 @@ var gate_req_level: int = 2
 # --- Constants ---
 const EXP_PER_LEVEL: int = 100
 const MAX_LEVEL: int = 3
+const MAX_POTIONS: int = 3
+const POTION_HEAL_AMOUNT: int = 30
 const MINION_EXP_REWARD: int = 50
 const MINION_POTION_DROP_CHANCE: float = 0.35
 
@@ -63,9 +65,9 @@ func award_minion_exp() -> bool:
 	exp += MINION_EXP_REWARD
 	exp_changed.emit(exp)
 
-	# Random potion drop
+	# Random potion drop (max 3 potions)
 	if randf() < MINION_POTION_DROP_CHANCE:
-		potions += 1
+		potions = mini(MAX_POTIONS, potions + 1)
 
 	# Check level up
 	if exp >= EXP_PER_LEVEL and level < MAX_LEVEL:
@@ -104,7 +106,7 @@ func use_potion() -> bool:
 	if potions <= 0:
 		return false
 	potions -= 1
-	hp = mini(hp + 30, max_hp)
+	hp = mini(hp + POTION_HEAL_AMOUNT, max_hp)
 	hp_changed.emit(hp)
 	return true
 
@@ -133,6 +135,16 @@ func _level_up() -> void:
 	hp = max_hp
 	hp_changed.emit(hp)
 	level_changed.emit(level)
+
+## Cheat function to instantly level up player or boost stats (capped strictly at MAX_LEVEL 3)
+func cheat_level_up() -> void:
+	if level < MAX_LEVEL:
+		_level_up()
+	else:
+		hp = max_hp
+		potions = mini(MAX_POTIONS, potions + 1)
+		hp_changed.emit(hp)
+		level_changed.emit(level)
 
 ## Get a summary dictionary for debug HUD display.
 func get_status_summary() -> Dictionary:
