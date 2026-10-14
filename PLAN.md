@@ -25,7 +25,7 @@ Tubes Tahap 3 mengombinasikan seluruh capaian dari tahap sebelumnya menjadi satu
          ▼
 [FASE 2: GERBANG PENJAGA ISTANA]
   - Menuju gerbang istana (Ada Unary Constraint CSP: Syarat Min. Level 2).
-  - Jika level cukup, gerbang terbuka untuk duel.
+  - Konfigurasi Penjaga ditentukan oleh CSP Solver (Tipe, Senjata, Segel Gerbang).
   - [PRE-BATTLE LOADING OVERLAY AKTIF]:
     Local Search (Hill Climbing / Simulated Annealing) membaca stat Player
     dan mengoptimasi konfigurasi Penjaga (HP, Atk, Def, Item, Minimax Depth).
@@ -34,6 +34,7 @@ Tubes Tahap 3 mengombinasikan seluruh capaian dari tahap sebelumnya menjadi satu
          ▼
 [FASE 3: RUANG TAHTA BOS ISTANA]
   - Menggunakan Castle Key untuk membuka pintu tahta Bos Neraka.
+  - Senjata Bos ditentukan oleh relasi CSP (Anti-Monopoly & Resonansi Segel).
   - [PRE-BATTLE LOADING OVERLAY AKTIF]:
     Local Search mengoptimasi loadout Bos (HP tebal, Heavy Damage, Potion, Depth 3-4).
   - Duel final klimaks melawan Bos Neraka.
@@ -46,37 +47,110 @@ Tubes Tahap 3 mengombinasikan seluruh capaian dari tahap sebelumnya menjadi satu
 
 Sesuai materi kuliah Modul 6, CSP menentukan **aturan penugasan benteng (*Castle Defense Assignment*)** sebelum musuh di-spawn. CSP menjamin solusi bersifat **Complete** dan **Consistent**.
 
+Untuk mendemonstrasikan graf kekangan yang kaya (*non-trivial constraint network*), CSP ini menggunakan **5 Variabel Utama** dengan **4 Binary Constraints yang saling mengunci (*cyclic/interconnected*)**, sehingga inferensi pemangkasan domain **AC-3 (Arc Consistency)** dan heuristik **MRV / LCV** dapat diuji dan dipamerkan secara nyata kepada dosen penguji.
+
 ### 2.1 Komponen Triplet $\langle X, D, C \rangle$
 
 #### A. Variabel ($X$)
-1. $X_{\text{guard\_type}}$: Tipe karakter Penjaga Gerbang.
-2. $X_{\text{boss\_weapon}}$: Senjata / Elemen Bos Tahta.
-3. $X_{\text{gate\_req}}$: Syarat level minimal untuk menantang Penjaga Gerbang.
-4. $X_{\text{castle\_potions}}$: Kuota total potion yang disediakan oleh gudang logistik istana.
+1. $X_{\text{guard\_type}}$: Tipe/Archetype karakter Penjaga Gerbang.
+2. $X_{\text{guard\_weapon}}$: Tipe senjata yang digunakan Penjaga Gerbang.
+3. $X_{\text{boss\_weapon}}$: Senjata utama Bos Neraka di Ruang Tahta.
+4. $X_{\text{gate\_seal}}$: Jenis segel magis penghalang yang terpasang pada Gerbang Besi Neraka.
+5. $X_{\text{gate\_req}}$: Syarat level minimal player untuk menantang Penjaga Gerbang.
+6. $X_{\text{castle\_potions}}$: Kuota total potion logistik istana neraka.
 
 #### B. Domain ($D$)
-1. $D(X_{\text{guard\_type}}) = \{\text{Hell Knight (Fisik)}, \text{Fire Shaman (Sihir)}, \text{Gargoyle (Tank)}\}$
-2. $D(X_{\text{boss\_weapon}}) = \{\text{Flame Sword}, \text{Cursed Scythe}, \text{Dark Trident}\}$
-3. $D(X_{\text{gate\_req}}) = \{2, 3\}$
-4. $D(X_{\text{castle\_potions}}) = \{2, 3, 4\}$
+1. $D(X_{\text{guard\_type}}) = \{\text{Infernal Knight (Fisik)}, \text{Abyssal Shaman (Sihir)}, \text{Obsidian Gargoyle (Tank)}\}$
+2. $D(X_{\text{guard\_weapon}}) = \{\text{Flame Greatsword}, \text{Void Staff}, \text{Chaos Mace}\}$
+3. $D(X_{\text{boss\_weapon}}) = \{\text{Flame Scythe}, \text{Shadow Blade}, \text{Blood Trident}\}$
+4. $D(X_{\text{gate\_seal}}) = \{\text{Seal of Fire}, \text{Seal of Shadow}, \text{Seal of Blood}\}$
+5. $D(X_{\text{gate\_req}}) = \{2, 3\}$
+6. $D(X_{\text{castle\_potions}}) = \{2, 3, 4\}$
 
 #### C. Batasan / Constraints ($C$)
-1. **Unary Constraint (Satu Variabel):**
-   * Syarat gerbang tidak boleh mengizinkan player Level 1 langsung masuk:
-     $$X_{\text{gate\_req}} \ge 2$$
-   * Senjata Bos tidak boleh berstatus unequipped/kosong:
-     $$X_{\text{boss\_weapon}} \neq \text{None}$$
-2. **Binary Constraint (Dua Variabel):**
-   * **Diversifikasi Taktik Benteng:** Elemen/tipe Penjaga Gerbang tidak boleh identik dengan elemen senjata Bos agar Player dituntut menggunakan taktik berbeda di tiap tahap:
-     $$\text{Element}(X_{\text{guard\_type}}) \neq \text{Element}(X_{\text{boss\_weapon}})$$
-3. **Global Constraint (Banyak Variabel):**
-   * **Alokasi Logistik Istana:** Jumlah total potion yang dibawa Penjaga dan Bos tidak boleh melebihi pasokan logistik istana:
-     $$\text{Potion}_{\text{Guard}} + \text{Potion}_{\text{Boss}} \le X_{\text{castle\_potions}}$$
 
-### 2.2 Syarat Keabsahan Solusi CSP
-* **Complete:** Seluruh variabel ($X_1, X_2, X_3, X_4$) terisi nilai (*assigned*).
-* **Consistent:** Tidak ada pelanggaran terhadap constraint unary, binary, maupun global.
-* **Metode Penyelesaian:** Algoritma **Backtracking Search** dipercepat dengan heuristik **MRV (Minimum Remaining Values)**, tie-breaker **Degree Heuristic**, urutan nilai **LCV (Least Constraining Value)**, dan inferensi propagasi **AC-3 (Arc Consistency)**.
+##### 1. Unary Constraints (Satu Variabel)
+* **Kekangan Masuk Gerbang:** Syarat gerbang tidak boleh mengizinkan player Level 1 langsung masuk:
+  $$X_{\text{gate\_req}} \ge 2$$
+* **Kelayakan Persenjataan:** Senjata Bos tidak boleh berstatus kosong/unequipped:
+  $$X_{\text{boss\_weapon}} \neq \text{None}$$
+
+##### 2. Binary Constraints (Relasi Antar Dua Variabel)
+1. **Constraint 1 (Class Compatibility: $X_{\text{guard\_type}} \leftrightarrow X_{\text{guard\_weapon}}$):**
+   Penjaga hanya boleh memegang senjata yang kompatibel dengan profisiensi kelasnya:
+   * *Infernal Knight (Fisik)* $\in \{\text{Flame Greatsword}, \text{Chaos Mace}\}$ *(tidak boleh memakai Void Staff)*.
+   * *Abyssal Shaman (Sihir)* $\in \{\text{Void Staff}, \text{Flame Greatsword}\}$ *(tidak boleh memakai Chaos Mace berat)*.
+   * *Obsidian Gargoyle (Tank)* $\in \{\text{Chaos Mace}, \text{Void Staff}\}$ *(tidak boleh memakai Flame Greatsword)*.
+   $$\text{Compatible}(X_{\text{guard\_type}}, X_{\text{guard\_weapon}}) = \text{True}$$
+
+2. **Constraint 2 (Element Anti-Monopoly: $X_{\text{guard\_type}} \leftrightarrow X_{\text{boss\_weapon}}$):**
+   Elemen dasar pertahanan Penjaga tidak boleh sama dengan senjata Bos agar Player dituntut mengganti strategi elemen saat beralih dari fase Penjaga ke fase Bos:
+   $$\text{Element}(X_{\text{guard\_type}}) \neq \text{Element}(X_{\text{boss\_weapon}})$$
+   * Jika *Infernal Knight (Api)* $\implies X_{\text{boss\_weapon}} \neq \text{Flame Scythe}$.
+   * Jika *Abyssal Shaman (Shadow)* $\implies X_{\text{boss\_weapon}} \neq \text{Shadow Blade}$.
+   * Jika *Obsidian Gargoyle (Blood/Earth)* $\implies X_{\text{boss\_weapon}} \neq \text{Blood Trident}$.
+
+3. **Constraint 3 (Armory Core Exclusivity: $X_{\text{guard\_weapon}} \leftrightarrow X_{\text{boss\_weapon}}$):**
+   Gudang persenjataan benteng neraka memiliki stok material inti terbatas; Penjaga dan Bos tidak boleh memakai senjata berbahan inti magis yang sama di satu sesi pertempuran:
+   $$\text{CoreMaterial}(X_{\text{guard\_weapon}}) \neq \text{CoreMaterial}(X_{\text{boss\_weapon}})$$
+   * *Flame Greatsword (Core Api)* $\implies X_{\text{boss\_weapon}} \neq \text{Flame Scythe}$.
+   * *Void Staff (Core Shadow)* $\implies X_{\text{boss\_weapon}} \neq \text{Shadow Blade}$.
+   * *Chaos Mace (Core Darah)* $\implies X_{\text{boss\_weapon}} \neq \text{Blood Trident}$.
+
+4. **Constraint 4 (Elemental Resonance: $X_{\text{boss\_weapon}} \leftrightarrow X_{\text{gate\_seal}}$):**
+   Segel magis pada gerbang istana ditenagai oleh resonansi aura dari senjata Bos di ruang tahta:
+   $$\text{Resonates}(X_{\text{boss\_weapon}}, X_{\text{gate\_seal}}) = \text{True}$$
+   * *Flame Scythe* $\iff$ *Seal of Fire*.
+   * *Shadow Blade* $\iff$ *Seal of Shadow*.
+   * *Blood Trident* $\iff$ *Seal of Blood*.
+
+##### 3. Global Constraint (Multi Variabel)
+* **Alokasi Potion Istana:** Jumlah total potion yang dibawa Penjaga dan Bos tidak boleh melebihi pasokan logistik istana:
+  $$\text{Potion}_{\text{Guard}} + \text{Potion}_{\text{Boss}} \le X_{\text{castle\_potions}}$$
+
+### 2.2 Diagram Graf Kekangan (Constraint Graph)
+
+```mermaid
+graph TD
+    GT["X_guard_type<br>(Knight / Shaman / Gargoyle)"]
+    GW["X_guard_weapon<br>(Greatsword / Staff / Mace)"]
+    BW["X_boss_weapon<br>(Flame Scythe / Shadow Blade / Blood Trident)"]
+    GS["X_gate_seal<br>(Seal Fire / Shadow / Blood)"]
+    GR["X_gate_req<br>(Level 2 / 3)"]
+
+    GT ---|"C1: Class Compatibility"| GW
+    GT ---|"C2: Element Anti-Monopoly"| BW
+    GW ---|"C3: Armory Core Exclusivity"| BW
+    BW ---|"C4: Elemental Resonance"| GS
+
+    style GT fill:#4a1515,stroke:#ff5533,stroke-width:2px,color:#fff
+    style GW fill:#2a1b40,stroke:#aa55ff,stroke-width:2px,color:#fff
+    style BW fill:#4a1515,stroke:#ff5533,stroke-width:2px,color:#fff
+    style GS fill:#153a4a,stroke:#33ccff,stroke-width:2px,color:#fff
+    style GR fill:#2a3a15,stroke:#88ff33,stroke-width:2px,color:#fff
+```
+
+> **Dampak Akademis Arc Consistency (AC-3):**  
+> Graf di atas memiliki siklus segitiga antara $X_{\text{guard\_type}}$, $X_{\text{guard\_weapon}}$, dan $X_{\text{boss\_weapon}}$. Ketika Backtracking memilih suatu nilai untuk $X_{\text{guard\_type}}$, algoritma AC-3 secara otomatis memangkas domain $X_{\text{guard\_weapon}}$, yang kemudian memicu pemangkasan domain $X_{\text{boss\_weapon}}$, lalu membatasi pilihan $X_{\text{gate\_seal}}$. Hal ini membuktikan algoritma CSP bekerja aktif dan terukur.
+
+---
+
+### 2.3 Strategi Visualisasi 9 Variasi Karakter (Pendekatan Modular - Opsi A)
+
+Untuk merepresentasikan 9 kemungkinan kombinasi Penjaga ($3 \text{ Guard Types} \times 3 \text{ Weapons}$) secara visual tanpa harus menggambar 9 spritesheet animasi raksasa dari nol, game menerapkan sistem **Modular Visuals**:
+
+1. **3 Base Spritesheet Karakter Unik (Overworld & Battle):**
+   * **Infernal Knight:** Tubuh zirah plate hitam obsidian tegap, helm tanduk api, animasi sabetan pedang.
+   * **Abyssal Shaman:** Jubah bertudung ungu-hitam compang-camping, mengambang, animasi membaca mantra sihir.
+   * **Obsidian Gargoyle:** Monster batu berkepak sayap, siluet bungkuk berotot, animasi hantaman tanah.
+2. **3 Senjata / Aura Terpasang Dinamis:**
+   * Node `Sprite2D` senjata dipasangkan (*attached*) ke bone/hand slot karakter, memancarkan efek partikel sesuai senjata terpilih (*Flame Greatsword*, *Void Staff*, atau *Chaos Mace*).
+3. **9 Avatar Portrait Khusus untuk HUD Duel:**
+   * Setiap kombinasi Guard Type + Weapon memiliki icon avatar portrait tersendiri pada HUD duel (contoh: *Knight with Greatsword*, *Knight with Mace*, *Shaman with Staff*, dst.).
+4. **3 Efek Visual Serangan (Attack VFX Spritesheet):**
+   * *Flame Slash VFX:* Sabetan pedang api melengkung membara.
+   * *Void Orb VFX:* Bola proyektil sihir hitam-ungu meledak.
+   * *Earth Bash VFX:* Hantaman gada batu retakan tanah berpendar.
 
 ---
 
@@ -155,43 +229,51 @@ Untuk kebutuhan presentasi akademis, saat player menabrak/menantang Penjaga atau
 
 ---
 
-## 5. Rincian Kebutuhan Aset Tambahan (Lengkap & Detail)
+## 5. Rincian Kebutuhan Aset Tambahan (Lengkap & Terstruktur)
 
 ### 5.1 Aset Visual: Karakter & NPC
-| Nama Aset | Tipe | Deskripsi & Spesifikasi | Status Saat Ini |
+| Nama Aset | Tipe | Deskripsi & Spesifikasi | Status |
 | :--- | :--- | :--- | :--- |
-| `minion_imp.png` | Spritesheet | Karakter minion kecil bertanduk merah, jalan lambat, animasi Idle & Walk. | Perlu Dibuat |
-| `guard_knight.png` | Spritesheet | Penjaga gerbang berperisai hitam & pedang api, badan tegap, animasi Idle & Attack. | Perlu Dibuat |
-| `demon_boss.png` | Spritesheet | Bos besar penguasa istana neraka (sudah ada basisnya, perlu penyesuaian avatar tahta). | Sudah Ada / Poles |
-| `avatar_minion.png` | UI Portrait | Foto profil bulat/persegi untuk HUD pertarungan Minion (64x64). | Perlu Dibuat |
-| `avatar_guard.png` | UI Portrait | Foto profil bulat/persegi untuk HUD pertarungan Penjaga Gerbang (64x64). | Perlu Dibuat |
+| `minion_imp.png` | Spritesheet | Karakter imp merah kecil, bertanduk, animasi Idle & Walk 4-arah. | Selesai / Terintegrasi |
+| `guard_knight.png` | Spritesheet | Base Guard Archetype 1: Ksatria zirah hitam berpedang api. | Selesai / Terintegrasi |
+| `guard_shaman.png` | Spritesheet | Base Guard Archetype 2: Penyihir jubah bertudung ungu-hitam, melayang. | Siap Generate |
+| `guard_gargoyle.png`| Spritesheet | Base Guard Archetype 3: Monster gargoyle batu bersayap kelabu. | Siap Generate |
+| `demon_boss.png` | Spritesheet | Bos besar iblis penguasa tahta neraka bermahkota tanduk. | Selesai / Terintegrasi |
 
-### 5.2 Aset Visual: Map, Environment & Props
-| Nama Aset | Tipe | Deskripsi & Spesifikasi | Status Saat Ini |
+### 5.2 Aset Visual: Senjata Modular & VFX Serangan
+| Nama Aset | Tipe | Deskripsi & Spesifikasi | Status |
 | :--- | :--- | :--- | :--- |
-| `gate_hell_closed.png` | Sprite / Tile | Gerbang besi neraka tertutup rantai magis (menghalangi masuk jika level < 2). | Perlu Dibuat |
-| `gate_hell_open.png` | Sprite / Tile | Gerbang besi neraka terbuka lebar setelah syarat level / kunci terpenuhi. | Perlu Dibuat |
-| `castle_walls.png` | Tileset | Dinding benteng bata batu hitam obsidian untuk area ruang tahta Bos. | Perlu Dibuat |
-| `throne_boss.png` | Prop Sprite | Kursi tahta tengkorak berapi di belakang posisi berdiri Bos Istana. | Perlu Dibuat |
-| `gate_warning_sign.png`| Prop / UI | Tanda seru menyala di depan gerbang bertuliskan simbol larangan Level 1. | Perlu Dibuat |
+| `weapon_flame_sword.png` | Sprite / Icon | Pedang besar api membara (*Flame Greatsword*). | Siap Generate |
+| `weapon_void_staff.png` | Sprite / Icon | Tongkat kristal bayangan ungu bercahaya (*Void Staff*). | Siap Generate |
+| `weapon_chaos_mace.png` | Sprite / Icon | Gada duri batu magma darah (*Chaos Mace*). | Siap Generate |
+| `weapon_flame_scythe.png` | Sprite / Icon | Sabit raksasa api neraka milik Bos (*Flame Scythe*). | Siap Generate |
+| `weapon_shadow_blade.png` | Sprite / Icon | Pedang bayangan obsidian terkutuk milik Bos (*Shadow Blade*). | Siap Generate |
+| `weapon_blood_trident.png` | Sprite / Icon | Trisula darah magma bertanduk milik Bos (*Blood Trident*). | Siap Generate |
+| `vfx_flame_slash.png` | VFX Spritesheet | Efek tebasan melengkung api membakar (4 frame horizontal). | Siap Generate |
+| `vfx_void_orb.png` | VFX Spritesheet | Efek tembakan bola energi gelap & ledakan (4 frame). | Siap Generate |
+| `vfx_earth_bash.png` | VFX Spritesheet | Efek retakan batu tanah magma saat dihantam (4 frame). | Siap Generate |
 
-### 5.3 Aset Visual: UI & Icon Khusus
-| Nama Aset | Tipe | Deskripsi & Spesifikasi | Status Saat Ini |
+### 5.3 Aset Visual: UI, Emblem Segel & Avatar HUD
+| Nama Aset | Tipe | Deskripsi & Spesifikasi | Status |
 | :--- | :--- | :--- | :--- |
-| `icon_castle_key.png` | UI Icon | Kunci emas kuno berukir kepala iblis (32x32 / 64x64). | Perlu Dibuat |
-| `icon_level_badge.png` | UI Icon | Badge emblem level player (Level 1, 2, 3) di HUD utama. | Perlu Dibuat |
-| `panel_loading_bg.png` | UI Background| Latar gelap transparan beraksen neon/magma untuk layar transisi kalkulasi AI. | Perlu Dibuat |
-| `icon_algorithm_chip.png`| UI Icon | Ikon chip sirkuit / otak AI untuk indikator Local Search aktif. | Perlu Dibuat |
-| `icon_heavy_attack.png` | UI Icon | Ikon pedang menyala ganda untuk aksi Heavy Attack (32x32). | Perlu Dibuat |
+| `seal_fire.png` | UI Emblem | Emblem segel api gerbang neraka (Segel Merah). | Siap Generate |
+| `seal_shadow.png` | UI Emblem | Emblem segel bayangan gerbang neraka (Segel Ungu). | Siap Generate |
+| `seal_blood.png` | UI Emblem | Emblem segel darah gerbang neraka (Segel Crimson). | Siap Generate |
+| `avatar_grid_9guards.png` | UI Portrait Sheet | Sheet grid 9 avatar portrait duel ($3 \times 3$) untuk tiap kombinasi Guard + Weapon. | Siap Generate |
+| `icon_castle_key.png` | UI Icon | Kunci emas kuno berukir kepala iblis. | Selesai / Terintegrasi |
+| `icon_level_badge.png` | UI Icon | Badge emblem level player (Level 1, 2, 3) di HUD. | Selesai / Terintegrasi |
+| `panel_loading_bg.png` | UI Background | Latar kaca obsidian gelap transparan untuk layar transisi AI. | Selesai / Terintegrasi |
+| `icon_algorithm_chip.png`| UI Icon | Ikon chip sirkuit / otak AI untuk indikator Local Search aktif. | Selesai / Terintegrasi |
+| `icon_heavy_attack.png` | UI Icon | Ikon pedang menyala ganda untuk aksi Heavy Attack. | Selesai / Terintegrasi |
 
 ### 5.4 Aset Audio & Sound Effects (SFX)
-| Nama Aset | Format | Deskripsi Suara | Status Saat Ini |
+| Nama Aset | Format | Deskripsi Suara | Status |
 | :--- | :--- | :--- | :--- |
-| `sfx_encounter_alert.wav` | SFX | Bunyi drum dentuman tegang saat menabrak penjaga / bos. | Perlu Ditambah |
-| `sfx_balancer_tick.wav` | SFX | Suara klik digital cepat saat Local Search menguji iterasi tetangga di loading overlay. | Perlu Ditambah |
-| `sfx_gate_unlock.wav` | SFX | Suara rantai berat putus dan gerbang batu bergeser terbuka. | Perlu Ditambah |
-| `sfx_level_up.wav` | SFX | Denting kemenangan fanfare pendek saat naik level. | Perlu Ditambah |
-| `bgm_boss_chamber.ogg` | BGM | Musik orkestra dramatis ritme cepat untuk pertarungan ruang tahta Bos. | Perlu Ditambah |
+| `sfx_encounter_alert.wav` | SFX | Bunyi drum dentuman tegang saat menabrak penjaga / bos. | Selesai / Terintegrasi |
+| `sfx_balancer_tick.wav` | SFX | Suara klik digital cepat saat Local Search menguji iterasi tetangga di loading overlay. | Selesai / Terintegrasi |
+| `sfx_gate_unlock.wav` | SFX | Suara rantai berat putus dan gerbang batu bergeser terbuka. | Selesai / Terintegrasi |
+| `sfx_level_up.wav` | SFX | Denting kemenangan fanfare pendek saat naik level. | Selesai / Terintegrasi |
+| `bgm_boss_chamber.ogg` | BGM | Musik orkestra dramatis ritme cepat untuk pertarungan ruang tahta Bos. | Selesai / Terintegrasi |
 
 ---
 
@@ -202,8 +284,8 @@ Untuk kebutuhan presentasi akademis, saat player menabrak/menantang Penjaga atau
    * Perluas `BattleState` agar mendukung parameter dinamis: `HeavyAttack`, `PotionCount`, `PotionHealValue`, dan `MinimaxDepth`.
 
 2. **Step 2 - CSP Solver Module (`CSPSolver.gd`):**
-   * Implementasikan struktur data $X, D, C$.
-   * Tulis algoritma Backtracking dengan MRV, LCV, dan AC-3.
+   * Implementasikan struktur data $X, D, C$ dengan 5 Variabel & 4 Binary Constraints.
+   * Tulis algoritma Backtracking dengan MRV, LCV, dan propagasi AC-3.
    * Uji coba pembangkitan konfigurasi benteng konsisten dan komplit saat game dimuat.
 
 3. **Step 3 - Local Search Dynamic Balancer (`LocalSearchBalancer.gd`):**
@@ -215,11 +297,10 @@ Untuk kebutuhan presentasi akademis, saat player menabrak/menantang Penjaga atau
    * Hubungkan pemanggilan Local Search ke animasi visual step-by-step.
    * Tambahkan tombol toggle algoritma untuk demo dosen.
 
-5. **Step 5 - Map Expansion & Level Gating:**
-   * Pasang entitas Penjaga Gerbang di map dengan deteksi level player.
-   * Pasang pintu ruang tahta Bos dengan syarat Kunci Istana.
-   * Integrasikan transisi scene dari Map $\to$ Pre-Battle Loading $\to$ Turn-Based Arena $\to$ Map/Victory.
+5. **Step 5 - Modular Guard & VFX Integration:**
+   * Pasang sistem weapon slot modular pada Penjaga Gerbang berdasarkan hasil solusi CSP.
+   * Pasang VFX serangan (Flame Slash, Void Orb, Earth Bash) pada aksi duel.
 
 6. **Step 6 - Penulisan Laporan & Dokumentasi:**
-   * Masukkan tabel komparasi matematis CSP (MRV vs tanpa MRV) dan Local Search (Hill Climbing vs SA).
-   * Dokumentasikan screenshot Pre-Battle Loading Screen sebagai bukti implementasi nyata.
+   * Masukkan tabel komparasi matematis CSP (MRV vs tanpa MRV, iterasi AC-3) dan Local Search (Hill Climbing vs SA).
+   * Dokumentasikan screenshot Pre-Battle Loading Screen dan visualisasi graf CSP sebagai bukti implementasi nyata.
