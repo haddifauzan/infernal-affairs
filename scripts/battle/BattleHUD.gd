@@ -18,7 +18,9 @@ const TEX_PLAYER_AVATAR   := "res://assets/sprites/characters/player/player_avat
 const TEX_DEMON_AVATAR    := "res://assets/sprites/characters/demon/demon_avatar.png"
 const TEX_DEMON_BOSS      := "res://assets/sprites/characters/demon/demon_boss.png"
 const TEX_MINION_AVATAR   := "res://assets/sprites/characters/minion/avatar_minion.png"
+const TEX_MINION_PORTRAIT := "res://assets/sprites/characters/minion/minion_portrait.png"
 const TEX_GUARD_AVATAR    := "res://assets/sprites/characters/guard/avatar_guard.png"
+const TEX_GUARD_PORTRAIT  := "res://assets/sprites/characters/guard/guard_portrait.png"
 const TEX_AURA_PLAYER     := "res://assets/sprites/ui/effects/aura_player.png"
 const TEX_AURA_DEMON      := "res://assets/sprites/ui/effects/aura_demon.png"
 const TEX_ICON_SWORD      := "res://assets/sprites/ui/skills/icon_sword.png"
@@ -49,6 +51,7 @@ var _npc_def_badge:   PanelContainer
 var _npc_title_label: Label
 var _npc_doctrine_label: Label
 var _npc_avatar_rect: TextureRect
+var _npc_weapon_rect:  TextureRect
 var _btn_return:      Button
 
 # Combat Stage Elements
@@ -246,7 +249,7 @@ func _build_header_and_hp() -> void:
 	p_box.add_child(p_hdr)
 	var p_avatar := TextureRect.new()
 	p_avatar.texture = load(TEX_PLAYER_AVATAR)
-	p_avatar.custom_minimum_size = Vector2(20, 20)
+	p_avatar.custom_minimum_size = Vector2(44, 44)
 	p_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	p_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	p_hdr.add_child(p_avatar)
@@ -321,9 +324,17 @@ func _build_header_and_hp() -> void:
 	_npc_doctrine_label.visible = false
 	d_title_vbox.add_child(_npc_doctrine_label)
 
+	var d_wep := TextureRect.new()
+	d_wep.custom_minimum_size = Vector2(38, 38)
+	d_wep.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	d_wep.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	d_wep.visible = false
+	d_hdr.add_child(d_wep)
+	_npc_weapon_rect = d_wep
+
 	var d_avatar := TextureRect.new()
 	d_avatar.texture = load(TEX_DEMON_AVATAR)
-	d_avatar.custom_minimum_size = Vector2(20, 20)
+	d_avatar.custom_minimum_size = Vector2(44, 44)
 	d_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	d_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	d_hdr.add_child(d_avatar)
@@ -561,7 +572,7 @@ func _build_debug_sidebar() -> void:
 	# -- KOTAK 1: AI Engine & Configuration --
 	var cfg_data := _make_subbox(" AI Engine & Search Config", Color(0.3, 0.2, 0.6))
 	_box_config = cfg_data["panel"] as PanelContainer
-	var cfg_vbox := cfg_data["content"] as VBoxContainer
+	var cfg_vbox: VBoxContainer = cfg_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_config)
 	_lbl_algo  = _make_stat_row("Algorithm:", "Alpha-Beta Pruning", Color(0.0, 0.95, 0.85), cfg_vbox)
 	_lbl_eval  = _make_stat_row("Evaluation:", "HP Difference (Optimal)", Color(1.0, 0.85, 0.3), cfg_vbox)
@@ -571,7 +582,7 @@ func _build_debug_sidebar() -> void:
 	# -- KOTAK 2: Search Performance & Tree Stats --
 	var perf_data := _make_subbox(" Tree Search Performance", Color(0.15, 0.35, 0.65))
 	_box_perf = perf_data["panel"] as PanelContainer
-	var perf_vbox := perf_data["content"] as VBoxContainer
+	var perf_vbox: VBoxContainer = perf_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_perf)
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -594,7 +605,7 @@ func _build_debug_sidebar() -> void:
 	# -- KOTAK 4: Combat State Assessment --
 	var st_data := _make_subbox(" Strategic State Assessment", Color(0.2, 0.45, 0.35))
 	_box_state = st_data["panel"] as PanelContainer
-	var st_vbox := st_data["content"] as VBoxContainer
+	var st_vbox: VBoxContainer = st_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_state)
 	_lbl_advantage = _make_stat_row("Advantage:", "Even Match (0 HP)", Color(0.8, 0.8, 0.8), st_vbox)
 	_lbl_threat    = _make_stat_row("Threat Level:", "Moderate", Color(1.0, 0.8, 0.2), st_vbox)
@@ -602,7 +613,7 @@ func _build_debug_sidebar() -> void:
 	# -- KOTAK 5: Action History --
 	var hist_data := _make_subbox(" Recent Turns Log", Color(0.25, 0.25, 0.35))
 	_box_history = hist_data["panel"] as PanelContainer
-	var hist_vbox := hist_data["content"] as VBoxContainer
+	var hist_vbox: VBoxContainer = hist_data["content"] as VBoxContainer
 	boxes_vbox.add_child(_box_history)
 	_lbl_history = RichTextLabel.new()
 	_lbl_history.bbcode_enabled = true
@@ -927,27 +938,73 @@ func _trigger_hit_impact(def_node: Control, def_sprite: TextureRect, dmg: int, w
 	if not is_instance_valid(def_node) or not is_instance_valid(def_sprite):
 		return
 
-	# Flash red/white
-	def_sprite.modulate = Color(3.5, 0.4, 0.4) if is_crit else Color(2.5, 0.5, 0.5)
-	var tw := create_tween()
-	tw.tween_property(def_sprite, "modulate", Color(1.0, 1.0, 1.0), 0.22)
+	var is_player_defending: bool = (def_node == _player_node)
+	var is_player_attacker: bool = not is_player_defending
 
-	# Flinch / Knockback shake
+	# Determine VFX type and position
+	var v_type: String = "flame_slash"
+	var vfx_pos: Vector2 = def_node.position + Vector2(0.0, -75.0)
+
+	if is_player_attacker:
+		# Player is attacking! Fierce blade slash
+		v_type = "flame_slash"
+	else:
+		# NPC is attacking player! Match enemy archetype
+		if _manager and _manager.state:
+			var ename := _manager.state.enemy_name.to_lower()
+			if "shaman" in ename:
+				v_type = "void_orb"
+			elif "gargoyle" in ename:
+				v_type = "earth_bash"
+				vfx_pos = def_node.position + Vector2(0.0, -35.0) # Ground impact
+			elif "boss" in ename or "demon" in ename:
+				var bwep := _manager.state.boss_weapon.to_lower()
+				if "cursed" in bwep:
+					v_type = "void_orb"
+				elif "trident" in bwep:
+					v_type = "earth_bash"
+					vfx_pos = def_node.position + Vector2(0.0, -35.0)
+				else:
+					v_type = "flame_slash"
+			else:
+				v_type = "flame_slash"
+
+	# 1. Screen Shake on every hit (Crisp normal shake, thunderous crit shake)
+	if is_crit:
+		_shake_combat_stage(9.5, 0.28)
+	else:
+		_shake_combat_stage(4.5, 0.16)
+
+	# 2. Flash red/white & Squash Flinch on target sprite
+	def_sprite.modulate = Color(3.5, 0.4, 0.4) if is_crit else Color(2.5, 0.5, 0.5)
+	var tw_flash := create_tween()
+	tw_flash.tween_property(def_sprite, "modulate", Color(1.0, 1.0, 1.0), 0.20)
+
+	# Squash flinch: briefly flatten then spring back
+	var base_scale: Vector2 = _player_base_scale if is_player_defending else _demon_base_scale
+	var tw_squash := create_tween()
+	tw_squash.tween_property(def_sprite, "scale", base_scale * Vector2(1.22, 0.80), 0.06).set_trans(Tween.TRANS_QUAD)
+	tw_squash.tween_property(def_sprite, "scale", base_scale, 0.18).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+	# 3. Spawn High-Impact VFX Animation
+	_spawn_attack_vfx(vfx_pos, v_type, is_crit, is_player_attacker)
+
+	# 4. Flinch / Knockback shake
 	var orig_pos := def_node.position
 	var knock_dir := 1.0 if def_node == _demon_node else -1.0
-	var knock_dist := 35.0 if is_crit else 18.0
+	var knock_dist := 38.0 if is_crit else 20.0
 	var tw_knock := create_tween()
-	tw_knock.tween_property(def_node, "position", orig_pos + Vector2(knock_dir * knock_dist, 0.0), 0.08)
-	tw_knock.tween_property(def_node, "position", orig_pos, 0.14)
+	tw_knock.tween_property(def_node, "position", orig_pos + Vector2(knock_dir * knock_dist, 0.0), 0.07).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw_knock.tween_property(def_node, "position", orig_pos, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
-	# Floating damage number
-	var spawn_pos := def_node.position + Vector2(0.0, -100.0)
+	# 5. Floating damage number with punchy scale bounce
+	var spawn_pos := def_node.position + Vector2(0.0, -110.0)
 	if was_blocked:
 		_spawn_floating_text(" BLOCKED! -%d HP" % dmg, spawn_pos, Color(0.3, 0.8, 1.0), false)
 	elif is_crit:
-		_spawn_floating_text(" -%d CRIT!" % dmg, spawn_pos, Color(1.0, 0.3, 0.2), true)
+		_spawn_floating_text(" -%d CRITICAL!" % dmg, spawn_pos, Color(1.0, 0.25, 0.15), true)
 	else:
-		_spawn_floating_text("-%d HP" % dmg, spawn_pos, Color(1.0, 0.8, 0.2), false)
+		_spawn_floating_text("-%d HP" % dmg, spawn_pos, Color(1.0, 0.85, 0.2), false)
 
 func _on_animation_finished(is_player: bool, new_state: BattleState) -> void:
 	if is_player:
@@ -972,17 +1029,21 @@ func _spawn_floating_text(text: String, pos: Vector2, color: Color, is_crit: boo
 		return
 	var lbl := Label.new()
 	lbl.text = text
-	lbl.add_theme_font_size_override("font_size", 14 if is_crit else 11)
+	lbl.add_theme_font_size_override("font_size", 16 if is_crit else 12)
 	lbl.add_theme_color_override("font_color", color)
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
 	lbl.position = pos - Vector2(50, 10)
+	lbl.pivot_offset = Vector2(50, 12)
+	lbl.scale = Vector2(1.6, 1.6) if is_crit else Vector2(1.3, 1.3)
 	lbl.z_index = 30
 	_vfx_layer.add_child(lbl)
 
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(lbl, "position:y", pos.y - 48.0, 0.75).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(lbl, "modulate:a", 0.0, 0.75).set_delay(0.2)
-	if is_crit:
-		tw.tween_property(lbl, "scale", Vector2(1.25, 1.25), 0.2).set_trans(Tween.TRANS_BOUNCE)
+	var tw := create_tween()
+	tw.tween_property(lbl, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(lbl, "position:y", pos.y - 48.0, 0.75).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.75).set_delay(0.25)
 	tw.finished.connect(lbl.queue_free)
 
 func _shake_combat_stage(intensity: float = 6.0, duration: float = 0.22) -> void:
@@ -1023,6 +1084,167 @@ func _on_npc_thinking(is_thinking: bool) -> void:
 		_demon_turn_badge.visible = true
 		_demon_badge_lbl.text = "CALCULATING..."
 
+func _get_seal_icon(seal_name: String) -> Texture2D:
+	const PATH := "res://assets/sprites/map/obstacles/seals_gate_sheet.png"
+	if not ResourceLoader.exists(PATH):
+		return null
+	var sheet: Texture2D = load(PATH) as Texture2D
+	if not sheet:
+		return null
+	var col := 0
+	var s_lower := seal_name.to_lower()
+	if "shadow" in s_lower or "void" in s_lower:
+		col = 1
+	elif "blood" in s_lower:
+		col = 2
+	else:
+		col = 0
+	var atlas := AtlasTexture.new()
+	atlas.atlas = sheet
+	var w := sheet.get_width() / 3.0
+	var h := float(sheet.get_height())
+	atlas.region = Rect2(col * w, 0, w, h)
+	return atlas
+
+func _get_weapon_icon(enemy_type: String, weapon_name: String) -> Texture2D:
+	var path := "res://assets/sprites/characters/demon/weapons_boss_sheet.png" if enemy_type == "boss" or enemy_type == "demon" else "res://assets/sprites/characters/guard/weapons_guard_sheet.png"
+	if not ResourceLoader.exists(path):
+		return null
+	var sheet: Texture2D = load(path) as Texture2D
+	if not sheet:
+		return null
+	var col := 0
+	var w_lower := weapon_name.to_lower()
+	if "cursed" in w_lower or "shadow" in w_lower or "staff" in w_lower or "void" in w_lower:
+		col = 1
+	elif "trident" in w_lower or "blood" in w_lower or "mace" in w_lower or "chaos" in w_lower:
+		col = 2
+	else:
+		col = 0
+	var atlas := AtlasTexture.new()
+	atlas.atlas = sheet
+	var w := sheet.get_width() / 3.0
+	var h := float(sheet.get_height())
+	atlas.region = Rect2(col * w, 0, w, h)
+	return atlas
+
+func _get_guard_avatar_texture(guard_name: String, gate_seal: String) -> Texture2D:
+	const GRID_PATH := "res://assets/sprites/characters/guard/avatar_grid_9guards.png"
+	if not ResourceLoader.exists(GRID_PATH):
+		return load(TEX_GUARD_AVATAR) as Texture2D
+	var grid_tex: Texture2D = load(GRID_PATH) as Texture2D
+	if not grid_tex:
+		return load(TEX_GUARD_AVATAR) as Texture2D
+	
+	var row := 0
+	var g_lower := guard_name.to_lower()
+	if "shaman" in g_lower:
+		row = 1
+	elif "gargoyle" in g_lower:
+		row = 2
+	else:
+		row = 0
+	
+	var col := 0
+	var s_lower := gate_seal.to_lower()
+	if "shadow" in s_lower or "void" in s_lower:
+		col = 1
+	elif "blood" in s_lower:
+		col = 2
+	else:
+		col = 0
+	
+	var atlas := AtlasTexture.new()
+	atlas.atlas = grid_tex
+	var cell_w := grid_tex.get_width() / 3.0
+	var cell_h := grid_tex.get_height() / 3.0
+	atlas.region = Rect2(col * cell_w, row * cell_h, cell_w, cell_h)
+	return atlas
+
+func _spawn_attack_vfx(pos: Vector2, vfx_type: String = "flame_slash", is_crit: bool = false, is_player_attacker: bool = true) -> void:
+	if not is_instance_valid(_vfx_layer):
+		return
+	var vfx_path: String = "res://assets/sprites/effects/vfx_flame_slash.png"
+	if vfx_type == "void_orb" and ResourceLoader.exists("res://assets/sprites/effects/vfx_void_orb.png"):
+		vfx_path = "res://assets/sprites/effects/vfx_void_orb.png"
+	elif vfx_type == "earth_bash" and ResourceLoader.exists("res://assets/sprites/effects/vfx_earth_bash.png"):
+		vfx_path = "res://assets/sprites/effects/vfx_earth_bash.png"
+	
+	if not ResourceLoader.exists(vfx_path):
+		return
+	var tex: Texture2D = load(vfx_path) as Texture2D
+	if not tex:
+		return
+	
+	var tr := TextureRect.new()
+	var atlas := AtlasTexture.new()
+	atlas.atlas = tex
+	var frame_w := tex.get_width() / 4.0
+	var frame_h := float(tex.get_height())
+	atlas.region = Rect2(0, 0, frame_w, frame_h)
+	tr.texture = atlas
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	
+	# Rich dynamic sizing & styling
+	var vfx_size := Vector2(240, 240) if not is_crit else Vector2(310, 310)
+	if vfx_type == "earth_bash":
+		vfx_size = Vector2(260, 220) if not is_crit else Vector2(330, 270)
+	elif vfx_type == "void_orb":
+		vfx_size = Vector2(220, 220) if not is_crit else Vector2(280, 280)
+
+	tr.custom_minimum_size = vfx_size
+	tr.size = vfx_size
+	tr.pivot_offset = vfx_size * 0.5
+	tr.position = pos - (vfx_size * 0.5)
+	tr.z_index = 25
+	_vfx_layer.add_child(tr)
+	
+	# Initial burst properties
+	tr.scale = Vector2(0.55, 0.55)
+	if vfx_type == "flame_slash":
+		tr.rotation_degrees = -20.0 if is_player_attacker else 20.0
+		tr.modulate = Color(2.4, 2.0, 1.4, 1.0)
+	elif vfx_type == "void_orb":
+		tr.rotation_degrees = 0.0
+		tr.modulate = Color(1.8, 0.9, 2.8, 1.0)
+	elif vfx_type == "earth_bash":
+		tr.rotation_degrees = 0.0
+		tr.modulate = Color(2.2, 1.8, 1.1, 1.0)
+
+	var tw := create_tween()
+	# Frame 0 -> Rapid expand with bright flash
+	tw.tween_property(tr, "scale", Vector2(1.22, 1.22), 0.06).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if vfx_type == "void_orb":
+		tw.parallel().tween_property(tr, "rotation_degrees", 90.0, 0.06)
+
+	tw.tween_interval(0.02)
+	# Frame 1
+	tw.tween_callback(func():
+		atlas.region = Rect2(frame_w * 1, 0, frame_w, frame_h)
+		tr.modulate = Color(1.5, 1.2, 1.0, 1.0)
+	)
+	if vfx_type == "void_orb":
+		tw.parallel().tween_property(tr, "rotation_degrees", 160.0, 0.07)
+	tw.tween_interval(0.06)
+
+	# Frame 2
+	tw.tween_callback(func():
+		atlas.region = Rect2(frame_w * 2, 0, frame_w, frame_h)
+		tr.modulate = Color(1.1, 1.0, 1.0, 0.95)
+	)
+	if vfx_type == "void_orb":
+		tw.parallel().tween_property(tr, "rotation_degrees", 220.0, 0.06)
+	tw.tween_interval(0.06)
+
+	# Frame 3 (Fade out burst)
+	tw.tween_callback(func():
+		atlas.region = Rect2(frame_w * 3, 0, frame_w, frame_h)
+	)
+	tw.parallel().tween_property(tr, "scale", Vector2(1.35, 1.35), 0.08)
+	tw.parallel().tween_property(tr, "modulate:a", 0.0, 0.08)
+	tw.finished.connect(func(): if is_instance_valid(tr): tr.queue_free())
+
 func _on_battle_started(state: BattleState) -> void:
 	_action_history.clear()
 	_update_positions()
@@ -1042,25 +1264,64 @@ func _on_battle_started(state: BattleState) -> void:
 		_npc_doctrine_label.text = " | ".join(doc_parts)
 		_npc_doctrine_label.visible = doc_parts.size() > 0
 
+	if is_instance_valid(_player_sprite):
+		_player_sprite.modulate.a = 1.0
+
+	if is_instance_valid(_npc_weapon_rect):
+		if state.enemy_type == "guard" and state.gate_seal.length() > 0:
+			var s_tex := _get_seal_icon(state.gate_seal)
+			if s_tex:
+				_npc_weapon_rect.texture = s_tex
+				_npc_weapon_rect.visible = true
+				_npc_weapon_rect.tooltip_text = "Segel Gerbang: %s" % state.gate_seal
+		elif (state.enemy_type == "boss" or state.enemy_type == "demon") and state.boss_weapon.length() > 0:
+			var w_tex := _get_weapon_icon("boss", state.boss_weapon)
+			if w_tex:
+				_npc_weapon_rect.texture = w_tex
+				_npc_weapon_rect.visible = true
+				_npc_weapon_rect.tooltip_text = "Senjata Bos: %s" % state.boss_weapon
+		else:
+			_npc_weapon_rect.visible = false
+
 	if is_instance_valid(_npc_avatar_rect):
-		var av_path: String = TEX_DEMON_AVATAR
 		if state.enemy_type == "minion":
-			av_path = TEX_MINION_AVATAR
+			if ResourceLoader.exists(TEX_MINION_AVATAR):
+				_npc_avatar_rect.texture = load(TEX_MINION_AVATAR)
 		elif state.enemy_type == "guard":
-			av_path = TEX_GUARD_AVATAR
-		var tex = load(av_path)
-		if tex:
-			_npc_avatar_rect.texture = tex
+			_npc_avatar_rect.texture = _get_guard_avatar_texture(state.enemy_name, state.gate_seal)
+		else:
+			if ResourceLoader.exists(TEX_DEMON_AVATAR):
+				_npc_avatar_rect.texture = load(TEX_DEMON_AVATAR)
 
 	if is_instance_valid(_demon_sprite):
+		_demon_sprite.modulate.a = 1.0
 		var sp_path: String = TEX_DEMON_BOSS
+		var should_flip: bool = true  # demon_boss faces right in raw sprite, flip_h=true faces player
 		if state.enemy_type == "minion":
-			sp_path = TEX_MINION_AVATAR
+			if ResourceLoader.exists(TEX_MINION_PORTRAIT):
+				sp_path = TEX_MINION_PORTRAIT
+			else:
+				sp_path = TEX_MINION_AVATAR
+			should_flip = false  # minion portrait is already facing left toward player
 		elif state.enemy_type == "guard":
-			sp_path = TEX_GUARD_AVATAR
-		var stex = load(sp_path)
-		if stex:
-			_demon_sprite.texture = stex
+			var ename := state.enemy_name.to_lower()
+			if "shaman" in ename and ResourceLoader.exists("res://assets/sprites/characters/guard/guard_shaman_portrait.png"):
+				sp_path = "res://assets/sprites/characters/guard/guard_shaman_portrait.png"
+			elif "gargoyle" in ename and ResourceLoader.exists("res://assets/sprites/characters/guard/guard_gargoyle_portrait.png"):
+				sp_path = "res://assets/sprites/characters/guard/guard_gargoyle_portrait.png"
+			elif ResourceLoader.exists("res://assets/sprites/characters/guard/guard_knight_portrait.png"):
+				sp_path = "res://assets/sprites/characters/guard/guard_knight_portrait.png"
+			elif ResourceLoader.exists(TEX_GUARD_PORTRAIT):
+				sp_path = TEX_GUARD_PORTRAIT
+			else:
+				sp_path = TEX_GUARD_AVATAR
+			should_flip = false  # guard portrait is already facing left toward player
+		
+		if ResourceLoader.exists(sp_path):
+			var stex = load(sp_path)
+			if stex:
+				_demon_sprite.texture = stex
+		_demon_sprite.flip_h = should_flip
 
 	_refresh_state_data(state)
 	_turn_label.text = "YOUR TURN  -  Select an action:"
@@ -1613,7 +1874,7 @@ func _make_mini_badge(text: String, color: Color) -> PanelContainer:
 
 func _make_texture_rect(path: String, size: Vector2) -> TextureRect:
 	var tr := TextureRect.new()
-	var tex := load(path) as Texture2D
+	var tex: Texture2D = load(path) as Texture2D
 	if tex:
 		tr.texture = tex
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

@@ -100,37 +100,47 @@ func setup_encounter(type: String, name: String, element: String, weapon: String
 	ai_action_order = csp_extra.get("action_order", 1)
 
 func _build_ui() -> void:
-	# Full screen root
+	# Full-screen dark translucent backdrop
+	var backdrop := ColorRect.new()
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.color = Color(0.02, 0.02, 0.04, 0.82)
+	add_child(backdrop)
+
+	# Root MarginContainer to pad nicely away from screen boundaries
 	_root = MarginContainer.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.add_theme_constant_override("margin_left", 30)
-	_root.add_theme_constant_override("margin_right", 30)
-	_root.add_theme_constant_override("margin_top", 20)
-	_root.add_theme_constant_override("margin_bottom", 20)
+	_root.add_theme_constant_override("margin_left", 20)
+	_root.add_theme_constant_override("margin_right", 20)
+	_root.add_theme_constant_override("margin_top", 12)
+	_root.add_theme_constant_override("margin_bottom", 12)
 	add_child(_root)
 
-	# Background styling with translucent dark neon obsidian
-	var bg_panel := Panel.new()
-	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Main Panel Container with Obsidian Neon Orange Border
+	var main_panel := PanelContainer.new()
+	main_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var bg_style := StyleBoxFlat.new()
 	bg_style.bg_color = Color(0.04, 0.03, 0.07, 0.96)
 	bg_style.border_color = Color(0.9, 0.35, 0.1, 0.85)
 	bg_style.set_border_width_all(2)
-	bg_style.set_corner_radius_all(10)
-	bg_panel.add_theme_stylebox_override("panel", bg_style)
-	_root.add_child(bg_panel)
+	bg_style.set_corner_radius_all(8)
+	bg_style.set_content_margin_all(12)
+	main_panel.add_theme_stylebox_override("panel", bg_style)
+	_root.add_child(main_panel)
 
-	# Main layout
+	# Main VBox inside main_panel
 	var main_vbox := VBoxContainer.new()
-	main_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_vbox.add_theme_constant_override("separation", 10)
-	_root.add_child(main_vbox)
+	main_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_theme_constant_override("separation", 8)
+	main_panel.add_child(main_vbox)
 
 	# --- 1. HEADER BAR ---
 	var header_box := HBoxContainer.new()
-	header_box.add_theme_constant_override("separation", 12)
+	header_box.add_theme_constant_override("separation", 10)
 	main_vbox.add_child(header_box)
 
+	# Chip icon
 	var icon_chip := TextureRect.new()
 	var chip_tex = load("res://assets/sprites/ui/skills/icon_algorithm_chip.png")
 	if chip_tex:
@@ -140,43 +150,87 @@ func _build_ui() -> void:
 		icon_chip.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	header_box.add_child(icon_chip)
 
+	# Gear / Seal icon
+	var gear_icon := TextureRect.new()
+	gear_icon.custom_minimum_size = Vector2(38, 38)
+	gear_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	gear_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	if enemy_type == "guard" and gate_seal.length() > 0:
+		gear_icon.texture = _get_seal_icon(gate_seal)
+		gear_icon.tooltip_text = "Segel Gerbang: %s" % gate_seal
+	elif enemy_type == "boss" and enemy_weapon.length() > 0:
+		gear_icon.texture = _get_weapon_icon("boss", enemy_weapon)
+		gear_icon.tooltip_text = "Senjata Bos: %s" % enemy_weapon
+	if gear_icon.texture:
+		header_box.add_child(gear_icon)
+
+	# Enemy Portrait Thumbnail
+	var enemy_portrait := TextureRect.new()
+	enemy_portrait.custom_minimum_size = Vector2(40, 40)
+	enemy_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	enemy_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var port_path: String = ""
+	if enemy_type == "guard":
+		var elower := enemy_name.to_lower()
+		if "shaman" in elower:
+			port_path = "res://assets/sprites/characters/guard/guard_shaman_portrait.png"
+		elif "gargoyle" in elower:
+			port_path = "res://assets/sprites/characters/guard/guard_gargoyle_portrait.png"
+		else:
+			port_path = "res://assets/sprites/characters/guard/guard_knight_portrait.png"
+	elif enemy_type == "minion":
+		port_path = "res://assets/sprites/characters/minion/minion_portrait.png"
+	elif enemy_type == "boss":
+		port_path = "res://assets/sprites/characters/demon/demon_boss.png"
+	if port_path.length() > 0 and ResourceLoader.exists(port_path):
+		var ptex: Texture2D = load(port_path) as Texture2D
+		if ptex:
+			enemy_portrait.texture = ptex
+			header_box.add_child(enemy_portrait)
+
+	# Title VBox
 	var title_vbox := VBoxContainer.new()
 	title_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_vbox.add_theme_constant_override("separation", 2)
 	header_box.add_child(title_vbox)
 
 	_title_label = Label.new()
 	_title_label.text = "ENCOUNTER OPTIMIZATION SYSTEM  |  LOCAL SEARCH DYNAMIC BALANCER"
-	_title_label.add_theme_font_size_override("font_size", 15)
+	_title_label.add_theme_font_size_override("font_size", 13)
 	_title_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.15))
+	_title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_vbox.add_child(_title_label)
 
 	_enemy_subtitle_label = Label.new()
 	var elem_info: String = " (%s)" % enemy_element if enemy_element.length() > 0 else ""
 	var wep_info: String = " [Senjata: %s]" % enemy_weapon if enemy_weapon.length() > 0 else ""
-	var strat_info: String = "  |  Doktrin Minimax: [%s]" % enemy_strategy if enemy_strategy.length() > 0 else ""
-	_enemy_subtitle_label.text = "Target: %s%s%s%s   |   Target Power Ratio: %.2fx" % [enemy_name, elem_info, wep_info, strat_info, target_ratio]
-	_enemy_subtitle_label.add_theme_font_size_override("font_size", 12)
+	var strat_info: String = "  |  Doktrin: [%s]" % enemy_strategy if enemy_strategy.length() > 0 else ""
+	_enemy_subtitle_label.text = "Target: %s%s%s%s   |   Target Ratio: %.2fx" % [enemy_name, elem_info, wep_info, strat_info, target_ratio]
+	_enemy_subtitle_label.add_theme_font_size_override("font_size", 11)
 	_enemy_subtitle_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.95))
+	_enemy_subtitle_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_vbox.add_child(_enemy_subtitle_label)
 
 	if enemy_strategy.length() > 0 or gate_seal_effect.length() > 0 or boss_weapon_effect.length() > 0:
 		var intel_lbl := Label.new()
 		var lines: Array[String] = []
 		if enemy_strategy.length() > 0:
-			lines.append(">> DOKTRIN AI (CSP): %s - %s" % [enemy_strategy, enemy_strategy_desc])
+			lines.append(">> DOKTRIN AI (CSP): %s" % enemy_strategy)
 		if enemy_type == "guard" and gate_seal_effect.length() > 0:
-			lines.append(">> EFEK MEDAN SEGEL [%s]: %s" % [gate_seal, gate_seal_effect])
+			lines.append(">> EFEK SEGEL: %s" % gate_seal_effect)
 		elif enemy_type == "boss" and boss_weapon_effect.length() > 0:
-			lines.append(">> EFEK SENJATA BOS [%s]: %s" % [enemy_weapon, boss_weapon_effect])
-		intel_lbl.text = "\n".join(lines)
+			lines.append(">> EFEK SENJATA: %s" % boss_weapon_effect)
+		intel_lbl.text = "   |   ".join(lines)
 		intel_lbl.add_theme_font_size_override("font_size", 10)
 		intel_lbl.add_theme_color_override("font_color", Color(0.2, 1.0, 0.7))
+		intel_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		title_vbox.add_child(intel_lbl)
 
+	# Algo Swap Button (compact!)
 	_algo_btn = Button.new()
-	_algo_btn.text = "Algoritma: Simulated Annealing (Demo)"
-	_algo_btn.add_theme_font_size_override("font_size", 11)
-	_algo_btn.custom_minimum_size = Vector2(230, 32)
+	_algo_btn.text = "Algo: Simulated Annealing (Swap)"
+	_algo_btn.add_theme_font_size_override("font_size", 10)
+	_algo_btn.custom_minimum_size = Vector2(185, 30)
 	_algo_btn.pressed.connect(_toggle_algorithm)
 	header_box.add_child(_algo_btn)
 
@@ -185,7 +239,8 @@ func _build_ui() -> void:
 
 	# --- 2. TOP METRICS CARDS (Player vs Target vs Enemy) ---
 	var metrics_row := HBoxContainer.new()
-	metrics_row.add_theme_constant_override("separation", 10)
+	metrics_row.add_theme_constant_override("separation", 8)
+	metrics_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_vbox.add_child(metrics_row)
 
 	# Card A: Player Status
@@ -201,13 +256,13 @@ func _build_ui() -> void:
 	var p_power: float = LocalSearchBalancer.calculate_player_power(p_hp, p_atk, p_def, p_pot)
 
 	var p_info := Label.new()
-	p_info.text = "Level: %d  |  HP: %d  |  Potions: %d\nAtk: %d  |  Def: %d" % [p_lvl, p_hp, p_pot, p_atk, p_def]
-	p_info.add_theme_font_size_override("font_size", 11)
+	p_info.text = "Level: %d  |  HP: %d  |  Pot: %d  |  Atk: %d  |  Def: %d" % [p_lvl, p_hp, p_pot, p_atk, p_def]
+	p_info.add_theme_font_size_override("font_size", 10)
 	p_vbox.add_child(p_info)
 
 	_lbl_player_power = Label.new()
 	_lbl_player_power.text = "Player Power: %.1f" % p_power
-	_lbl_player_power.add_theme_font_size_override("font_size", 12)
+	_lbl_player_power.add_theme_font_size_override("font_size", 11)
 	_lbl_player_power.add_theme_color_override("font_color", Color(0.2, 1.0, 0.8))
 	p_vbox.add_child(_lbl_player_power)
 
@@ -218,14 +273,14 @@ func _build_ui() -> void:
 
 	_lbl_target_power = Label.new()
 	var t_power: float = p_power * target_ratio
-	_lbl_target_power.text = "Target NPC Power: %.1f\n(Player Power x %.2f)" % [t_power, target_ratio]
-	_lbl_target_power.add_theme_font_size_override("font_size", 11)
+	_lbl_target_power.text = "Target NPC Power: %.1f (Player x %.2f)" % [t_power, target_ratio]
+	_lbl_target_power.add_theme_font_size_override("font_size", 10)
 	_lbl_target_power.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	t_vbox.add_child(_lbl_target_power)
 
 	_lbl_fitness_score = Label.new()
 	_lbl_fitness_score.text = "Fitness: -100.0 (Calculating...)"
-	_lbl_fitness_score.add_theme_font_size_override("font_size", 12)
+	_lbl_fitness_score.add_theme_font_size_override("font_size", 11)
 	_lbl_fitness_score.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
 	t_vbox.add_child(_lbl_fitness_score)
 
@@ -236,19 +291,19 @@ func _build_ui() -> void:
 
 	_lbl_npc_power = Label.new()
 	_lbl_npc_power.text = "NPC Power: 0.0"
-	_lbl_npc_power.add_theme_font_size_override("font_size", 12)
+	_lbl_npc_power.add_theme_font_size_override("font_size", 11)
 	_lbl_npc_power.add_theme_color_override("font_color", Color(1.0, 0.5, 0.3))
 	e_vbox.add_child(_lbl_npc_power)
 
 	var formula_lbl := Label.new()
-	formula_lbl.text = "HP + 2.2*Atk + 1.2*Heavy\n+ 3*Def + 0.7*PotHeal + 15*Depth"
-	formula_lbl.add_theme_font_size_override("font_size", 10)
+	formula_lbl.text = "HP + 2.2*Atk + 1.2*Heavy + 3*Def + 0.7*Pot + 15*Depth"
+	formula_lbl.add_theme_font_size_override("font_size", 9)
 	formula_lbl.add_theme_color_override("font_color", Color(0.65, 0.65, 0.75))
 	e_vbox.add_child(formula_lbl)
 
 	# --- 3. MIDDLE SECTION: LIVE LOG & STAT COMPARISON ---
 	var mid_row := HBoxContainer.new()
-	mid_row.add_theme_constant_override("separation", 12)
+	mid_row.add_theme_constant_override("separation", 10)
 	mid_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main_vbox.add_child(mid_row)
 
@@ -274,23 +329,23 @@ func _build_ui() -> void:
 
 	var log_title := Label.new()
 	log_title.text = "LIVE SEARCH STEP LOG (Iterasi Perturbasi Lokal)"
-	log_title.add_theme_font_size_override("font_size", 12)
+	log_title.add_theme_font_size_override("font_size", 11)
 	log_title.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
 	log_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	log_hdr.add_child(log_title)
 
 	_step_counter_label = Label.new()
 	_step_counter_label.text = "Step: 0/50"
-	_step_counter_label.add_theme_font_size_override("font_size", 11)
+	_step_counter_label.add_theme_font_size_override("font_size", 10)
 	_step_counter_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.3))
 	log_hdr.add_child(_step_counter_label)
 
 	_progress_bar = ProgressBar.new()
-	_progress_bar.custom_minimum_size = Vector2(0, 8)
+	_progress_bar.custom_minimum_size = Vector2(0, 6)
 	_progress_bar.show_percentage = false
 	var pb_style := StyleBoxFlat.new()
 	pb_style.bg_color = Color(0.1, 0.8, 0.5, 0.9)
-	pb_style.set_corner_radius_all(4)
+	pb_style.set_corner_radius_all(3)
 	_progress_bar.add_theme_stylebox_override("fill", pb_style)
 	log_vbox.add_child(_progress_bar)
 
@@ -298,34 +353,35 @@ func _build_ui() -> void:
 	_log_box.bbcode_enabled = true
 	_log_box.scroll_following = true
 	_log_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_log_box.add_theme_font_size_override("normal_font_size", 11)
+	_log_box.custom_minimum_size = Vector2(0, 110)
+	_log_box.add_theme_font_size_override("normal_font_size", 10)
 	log_vbox.add_child(_log_box)
 
 	# Right Column: Initial vs Optimized Stat Comparison Card
 	var comp_panel := PanelContainer.new()
-	comp_panel.custom_minimum_size = Vector2(310, 0)
+	comp_panel.custom_minimum_size = Vector2(275, 0)
 	var comp_style := StyleBoxFlat.new()
 	comp_style.bg_color = Color(0.06, 0.04, 0.10, 0.9)
 	comp_style.border_color = Color(0.7, 0.3, 0.8, 0.8)
 	comp_style.set_border_width_all(1)
 	comp_style.set_corner_radius_all(6)
-	comp_style.set_content_margin_all(10)
+	comp_style.set_content_margin_all(8)
 	comp_panel.add_theme_stylebox_override("panel", comp_style)
 	mid_row.add_child(comp_panel)
 
 	var comp_vbox := VBoxContainer.new()
-	comp_vbox.add_theme_constant_override("separation", 6)
+	comp_vbox.add_theme_constant_override("separation", 5)
 	comp_panel.add_child(comp_vbox)
 
 	var comp_title := Label.new()
 	comp_title.text = "KONFIGURASI AKHIR MUSUH"
-	comp_title.add_theme_font_size_override("font_size", 12)
+	comp_title.add_theme_font_size_override("font_size", 11)
 	comp_title.add_theme_color_override("font_color", Color(1.0, 0.5, 0.8))
 	comp_vbox.add_child(comp_title)
 
 	var comp_sub := Label.new()
 	comp_sub.text = "Awal (S_0)  ->  Optimal (S*)"
-	comp_sub.add_theme_font_size_override("font_size", 10)
+	comp_sub.add_theme_font_size_override("font_size", 9)
 	comp_sub.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
 	comp_vbox.add_child(comp_sub)
 
@@ -334,32 +390,33 @@ func _build_ui() -> void:
 
 	_stat_grid = GridContainer.new()
 	_stat_grid.columns = 2
-	_stat_grid.add_theme_constant_override("h_separation", 8)
-	_stat_grid.add_theme_constant_override("v_separation", 6)
+	_stat_grid.add_theme_constant_override("h_separation", 6)
+	_stat_grid.add_theme_constant_override("v_separation", 4)
 	comp_vbox.add_child(_stat_grid)
 
-	_lbl_hp_comp = _add_stat_row(_stat_grid, "HP Target:")
-	_lbl_atk_comp = _add_stat_row(_stat_grid, "Attack Damage:")
-	_lbl_heavy_comp = _add_stat_row(_stat_grid, "Heavy Attack:")
-	_lbl_def_comp = _add_stat_row(_stat_grid, "Defense Stat:")
-	_lbl_pot_comp = _add_stat_row(_stat_grid, "Potion Count/Heal:")
-	_lbl_depth_comp = _add_stat_row(_stat_grid, "Minimax Depth:")
+	_lbl_hp_comp = _add_stat_row(_stat_grid, "HP Stat:")
+	_lbl_atk_comp = _add_stat_row(_stat_grid, "Attack:")
+	_lbl_heavy_comp = _add_stat_row(_stat_grid, "Heavy Atk:")
+	_lbl_def_comp = _add_stat_row(_stat_grid, "Defense:")
+	_lbl_pot_comp = _add_stat_row(_stat_grid, "Potions:")
+	_lbl_depth_comp = _add_stat_row(_stat_grid, "Minimax:")
 
 	var note_lbl := Label.new()
-	note_lbl.text = "[OK] Menjamin win-rate ~55%\n[OK] Durasi pertempuran 5-7 turn\n[OK] Dinamis sesuai level & HP player"
-	note_lbl.add_theme_font_size_override("font_size", 10)
+	note_lbl.text = "[OK] Win-rate ~55% | 5-7 turn
+[OK] Dinamis sesuai level & HP"
+	note_lbl.add_theme_font_size_override("font_size", 9)
 	note_lbl.add_theme_color_override("font_color", Color(0.3, 0.9, 0.6))
 	comp_vbox.add_child(note_lbl)
 
 	# --- 4. BOTTOM ACTION CONTROLS ---
 	var bot_box := HBoxContainer.new()
-	bot_box.add_theme_constant_override("separation", 12)
+	bot_box.add_theme_constant_override("separation", 10)
 	main_vbox.add_child(bot_box)
 
 	_cancel_btn = Button.new()
-	_cancel_btn.text = " [Mundur / Batal]"
-	_cancel_btn.add_theme_font_size_override("font_size", 12)
-	_cancel_btn.custom_minimum_size = Vector2(140, 36)
+	_cancel_btn.text = " [Mundur / Batal] "
+	_cancel_btn.add_theme_font_size_override("font_size", 11)
+	_cancel_btn.custom_minimum_size = Vector2(130, 32)
 	_cancel_btn.pressed.connect(_on_cancel_pressed)
 	bot_box.add_child(_cancel_btn)
 
@@ -368,13 +425,13 @@ func _build_ui() -> void:
 	bot_box.add_child(spc)
 
 	_proceed_btn = Button.new()
-	_proceed_btn.text = " Mulai Duel (Masuk Arena Turn-Based) "
-	_proceed_btn.add_theme_font_size_override("font_size", 13)
-	_proceed_btn.custom_minimum_size = Vector2(280, 38)
+	_proceed_btn.text = " Mulai Duel (Masuk Arena) "
+	_proceed_btn.add_theme_font_size_override("font_size", 12)
+	_proceed_btn.custom_minimum_size = Vector2(230, 34)
 	var btn_style := StyleBoxFlat.new()
 	btn_style.bg_color = Color(0.9, 0.35, 0.1, 0.9)
 	btn_style.set_corner_radius_all(6)
-	btn_style.set_content_margin_all(8)
+	btn_style.set_content_margin_all(6)
 	_proceed_btn.add_theme_stylebox_override("normal", btn_style)
 	_proceed_btn.pressed.connect(_on_proceed_pressed)
 	bot_box.add_child(_proceed_btn)
@@ -387,17 +444,17 @@ func _make_info_card(title_text: String, border_col: Color) -> PanelContainer:
 	s.border_color = border_col
 	s.set_border_width_all(1)
 	s.set_corner_radius_all(6)
-	s.set_content_margin_all(8)
+	s.set_content_margin_all(6)
 	p.add_theme_stylebox_override("panel", s)
 
 	var vb := VBoxContainer.new()
 	vb.name = "VBox"
-	vb.add_theme_constant_override("separation", 4)
+	vb.add_theme_constant_override("separation", 3)
 	p.add_child(vb)
 
 	var t := Label.new()
 	t.text = title_text
-	t.add_theme_font_size_override("font_size", 11)
+	t.add_theme_font_size_override("font_size", 10)
 	t.add_theme_color_override("font_color", border_col)
 	vb.add_child(t)
 	return p
@@ -405,20 +462,18 @@ func _make_info_card(title_text: String, border_col: Color) -> PanelContainer:
 func _add_stat_row(parent: Control, label_text: String) -> Label:
 	var lbl := Label.new()
 	lbl.text = label_text
-	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_font_size_override("font_size", 10)
 	lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	parent.add_child(lbl)
 
 	var val_lbl := Label.new()
 	val_lbl.text = "--"
-	val_lbl.add_theme_font_size_override("font_size", 11)
+	val_lbl.add_theme_font_size_override("font_size", 10)
 	val_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	parent.add_child(val_lbl)
 	return val_lbl
 
-# ---------------------------------------------------------------
-# RUN LOCAL SEARCH OPTIMIZATION & REAL-TIME ANIMATION
-# ---------------------------------------------------------------
 func _run_optimization() -> void:
 	var p_hp: int = player_stats.get("hp", 100)
 	var p_pot: int = player_stats.get("potions", 1)
@@ -430,15 +485,15 @@ func _run_optimization() -> void:
 	var s0: Dictionary = LocalSearchBalancer.get_initial_state(enemy_type, player_stats)
 
 	if current_algo == "sa":
-		_algo_btn.text = "Algoritma: Simulated Annealing (Klik to Swap)"
+		_algo_btn.text = "Algo: Simulated Annealing (Swap)"
 		_algo_btn.add_theme_color_override("font_color", Color(0.2, 1.0, 0.6))
 		balancer_result = LocalSearchBalancer.run_simulated_annealing(s0, player_power, target_ratio, 50, bounds)
 	elif current_algo == "hc":
-		_algo_btn.text = "Algoritma: Steepest-Ascent Hill Climbing (Klik to Swap)"
+		_algo_btn.text = "Algo: Hill Climbing (Swap)"
 		_algo_btn.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))
 		balancer_result = LocalSearchBalancer.run_hill_climbing(s0, player_power, target_ratio, 35, bounds)
 	else: # "rr"
-		_algo_btn.text = "Algoritma: Hill Climbing + Random Restart (Klik to Swap)"
+		_algo_btn.text = "Algo: Random Restart (Swap)"
 		_algo_btn.add_theme_color_override("font_color", Color(0.3, 0.8, 1.0))
 		balancer_result = LocalSearchBalancer.run_hill_climbing_random_restart(s0, player_power, target_ratio, 3, 20, bounds)
 
@@ -596,3 +651,49 @@ func _on_proceed_pressed() -> void:
 func _on_cancel_pressed() -> void:
 	cancelled.emit()
 	queue_free()
+
+
+func _get_seal_icon(seal_name: String) -> Texture2D:
+	const PATH := "res://assets/sprites/map/obstacles/seals_gate_sheet.png"
+	if not ResourceLoader.exists(PATH):
+		return null
+	var sheet: Texture2D = load(PATH) as Texture2D
+	if not sheet:
+		return null
+	var col := 0
+	var s_lower := seal_name.to_lower()
+	if "shadow" in s_lower or "void" in s_lower:
+		col = 1
+	elif "blood" in s_lower:
+		col = 2
+	else:
+		col = 0
+	var atlas := AtlasTexture.new()
+	atlas.atlas = sheet
+	var w := sheet.get_width() / 3.0
+	var h := float(sheet.get_height())
+	atlas.region = Rect2(col * w, 0, w, h)
+	return atlas
+
+func _get_weapon_icon(enemy_t: String, weapon_name: String) -> Texture2D:
+	var path := "res://assets/sprites/characters/demon/weapons_boss_sheet.png" if enemy_t == "boss" else "res://assets/sprites/characters/guard/weapons_guard_sheet.png"
+	if not ResourceLoader.exists(path):
+		return null
+	var sheet: Texture2D = load(path) as Texture2D
+	if not sheet:
+		return null
+	var col := 0
+	var w_lower := weapon_name.to_lower()
+	if "cursed" in w_lower or "shadow" in w_lower or "staff" in w_lower or "void" in w_lower:
+		col = 1
+	elif "trident" in w_lower or "blood" in w_lower or "mace" in w_lower or "chaos" in w_lower:
+		col = 2
+	else:
+		col = 0
+	var atlas := AtlasTexture.new()
+	atlas.atlas = sheet
+	var w := sheet.get_width() / 3.0
+	var h := float(sheet.get_height())
+	atlas.region = Rect2(col * w, 0, w, h)
+	return atlas
+

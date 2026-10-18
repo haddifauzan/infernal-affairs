@@ -286,35 +286,35 @@ Untuk kebutuhan presentasi akademis, saat player menabrak/menantang Penjaga atau
 
 ## 5. Rincian Kebutuhan Aset Tambahan (Lengkap & Terstruktur)
 
-### 5.1 Aset Visual: Karakter & NPC
+### 5.1 Aset Visual: Karakter, Spritesheet & Standing Battle Portrait
 | Nama Aset | Tipe | Deskripsi & Spesifikasi | Status |
 | :--- | :--- | :--- | :--- |
 | `minion_imp.png` | Spritesheet | Karakter imp merah kecil, bertanduk, animasi Idle & Walk 4-arah. | Selesai / Terintegrasi |
 | `guard_knight.png` | Spritesheet | Base Guard Archetype 1: Ksatria zirah hitam berpedang api. | Selesai / Terintegrasi |
-| `guard_shaman.png` | Spritesheet | Base Guard Archetype 2: Penyihir jubah bertudung ungu-hitam, melayang. | Siap Generate |
-| `guard_gargoyle.png`| Spritesheet | Base Guard Archetype 3: Monster gargoyle batu bersayap kelabu. | Siap Generate |
-| `demon_boss.png` | Spritesheet | Bos besar iblis penguasa tahta neraka bermahkota tanduk. | Selesai / Terintegrasi |
+| `guard_shaman.png` | Spritesheet | Base Guard Archetype 2: Penyihir jubah bertudung ungu-hitam, melayang. | Selesai / Terintegrasi |
+| `guard_gargoyle.png`| Spritesheet | Base Guard Archetype 3: Monster gargoyle batu bersayap kelabu. | Selesai / Terintegrasi |
+| `player_portrait.png` | Battle Portrait | Ilustrasi berdiri Player Ksatria di panggung arena pertarungan turn-based. | Selesai / Terintegrasi |
+| `minion_portrait.png` | Battle Portrait | Ilustrasi berdiri Minion Imp di panggung arena duel (menghadap kiri ke arah player). | Selesai / Terintegrasi |
+| `guard_portrait.png` | Battle Portrait | Ilustrasi berdiri Penjaga Gerbang (Infernal Knight) zirah & perisai menara di arena duel. | Selesai / Terintegrasi |
+| `guard_knight_portrait.png` | Battle Portrait | Ilustrasi berdiri Infernal Knight HD 512x512 berzirah obsidian membara. | Selesai / Terintegrasi |
+| `guard_shaman_portrait.png` | Battle Portrait | Ilustrasi berdiri Abyssal Shaman melayang dengan tongkat void untuk panggung duel. | Selesai / Terintegrasi |
+| `guard_gargoyle_portrait.png`| Battle Portrait | Ilustrasi berdiri Obsidian Gargoyle batu magma dengan gada raksasa untuk panggung duel. | Selesai / Terintegrasi |
+| `demon_boss.png` | Spritesheet / Portrait | Bos besar iblis penguasa tahta neraka bermahkota tanduk di arena duel. | Selesai / Terintegrasi |
 
 ### 5.2 Aset Visual: Senjata Modular & VFX Serangan
 | Nama Aset | Tipe | Deskripsi & Spesifikasi | Status |
 | :--- | :--- | :--- | :--- |
-| `weapon_flame_sword.png` | Sprite / Icon | Pedang besar api membara (*Flame Greatsword*). | Siap Generate |
-| `weapon_void_staff.png` | Sprite / Icon | Tongkat kristal bayangan ungu bercahaya (*Void Staff*). | Siap Generate |
-| `weapon_chaos_mace.png` | Sprite / Icon | Gada duri batu magma darah (*Chaos Mace*). | Siap Generate |
-| `weapon_flame_scythe.png` | Sprite / Icon | Sabit raksasa api neraka milik Bos (*Flame Scythe*). | Siap Generate |
-| `weapon_shadow_blade.png` | Sprite / Icon | Pedang bayangan obsidian terkutuk milik Bos (*Shadow Blade*). | Siap Generate |
-| `weapon_blood_trident.png` | Sprite / Icon | Trisula darah magma bertanduk milik Bos (*Blood Trident*). | Siap Generate |
-| `vfx_flame_slash.png` | VFX Spritesheet | Efek tebasan melengkung api membakar (4 frame horizontal). | Siap Generate |
-| `vfx_void_orb.png` | VFX Spritesheet | Efek tembakan bola energi gelap & ledakan (4 frame). | Siap Generate |
-| `vfx_earth_bash.png` | VFX Spritesheet | Efek retakan batu tanah magma saat dihantam (4 frame). | Siap Generate |
+| `weapons_guard_sheet.png` | Sprite Sheet | Sheet 3 senjata penjaga: Flame Greatsword, Void Staff, Chaos Mace. | Selesai / Terintegrasi |
+| `weapons_boss_sheet.png` | Sprite Sheet | Sheet 3 senjata bos tahta: Flame Scythe, Cursed Blade, Blood Trident. | Selesai / Terintegrasi |
+| `vfx_flame_slash.png` | VFX Spritesheet | Efek tebasan melengkung api membakar (4 frame animasi hit impact). | Selesai / Terintegrasi |
+| `vfx_void_orb.png` | VFX Spritesheet | Efek tembakan bola energi gelap & ledakan (4 frame animasi hit impact). | Selesai / Terintegrasi |
+| `vfx_earth_bash.png` | VFX Spritesheet | Efek retakan batu tanah magma saat dihantam (4 frame animasi hit impact). | Selesai / Terintegrasi |
 
 ### 5.3 Aset Visual: UI, Emblem Segel & Avatar HUD
 | Nama Aset | Tipe | Deskripsi & Spesifikasi | Status |
 | :--- | :--- | :--- | :--- |
-| `seal_fire.png` | UI Emblem | Emblem segel api gerbang neraka (Segel Merah). | Siap Generate |
-| `seal_shadow.png` | UI Emblem | Emblem segel bayangan gerbang neraka (Segel Ungu). | Siap Generate |
-| `seal_blood.png` | UI Emblem | Emblem segel darah gerbang neraka (Segel Crimson). | Siap Generate |
-| `avatar_grid_9guards.png` | UI Portrait Sheet | Sheet grid 9 avatar portrait duel ($3 \times 3$) untuk tiap kombinasi Guard + Weapon. | Siap Generate |
+| `seals_gate_sheet.png` | UI Emblem Sheet | Sheet 3 segel magis gerbang: Seal of Flame, Seal of Shadow, Seal of Blood. | Selesai / Terintegrasi |
+| `avatar_grid_9guards.png` | UI Portrait Sheet | Sheet grid 9 avatar portrait duel (3x3) untuk tiap kombinasi Guard + Weapon. | Selesai / Terintegrasi |
 | `icon_castle_key.png` | UI Icon | Kunci emas kuno berukir kepala iblis. | Selesai / Terintegrasi |
 | `icon_level_badge.png` | UI Icon | Badge emblem level player (Level 1, 2, 3) di HUD. | Selesai / Terintegrasi |
 | `panel_loading_bg.png` | UI Background | Latar kaca obsidian gelap transparan untuk layar transisi AI. | Selesai / Terintegrasi |

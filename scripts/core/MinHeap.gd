@@ -22,7 +22,7 @@ func pop() -> Vector2i:
 
 func _sift_up(idx: int) -> void:
 	while idx > 0:
-		var parent = (idx - 1) / 2
+		var parent: int = (idx - 1) >> 1
 		if heap[idx]["priority"] < heap[parent]["priority"]:
 			var temp = heap[idx]
 			heap[idx] = heap[parent]

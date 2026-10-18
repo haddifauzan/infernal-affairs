@@ -1,6 +1,8 @@
 class_name MainScene
 extends Node2D
 
+const PreBattleLoadingOverlayScript = preload("res://scripts/UI/PreBattleLoadingOverlay.gd")
+
 ## Main scene orchestrator for Infernal Affairs - Tahap 3 (Expanded 44x46 Layout).
 ## Manages 2-map 3-zone world, NPC entities (Minion, Guard, Boss), encounter flow,
 ## player state progression, active A*/UCS search logic & live visualizations.
@@ -83,6 +85,7 @@ var throne_grid_pos: Vector2i = Vector2i(GridManager.CENTER_X, GridManager.THRON
 var boss_grid_pos: Vector2i = Vector2i(GridManager.CENTER_X, GridManager.BOSS_Y)
 
 func _ready() -> void:
+	randomize()
 	# Load audio
 	sfx_level_up = load("res://assets/audio/sfx_level_up.wav")
 	sfx_encounter_alert = load("res://assets/audio/sfx_encounter_alert.wav")
@@ -159,6 +162,7 @@ func start_new_game() -> void:
 	# Solve CSP for Castle Defense Assignment (Triplets <X, D, C> with MRV, LCV, AC-3)
 	csp_result = csp_solver.solve(true, true, true, true)
 	GameState.gate_req_level = csp_result.get("gate_req", 2)
+	if is_instance_valid(guard_entity): guard_entity.set_guard_type(csp_result.get("guard_type", "Infernal Knight"))
 
 	# Generate expanded 2-map 3-zone layout
 	grid_manager.generate_new_map()
@@ -228,6 +232,7 @@ func _spawn_guard() -> void:
 	var ts: float = float(grid_manager.tile_size)
 	guard_grid_pos = Vector2i(GridManager.CENTER_X, GridManager.COURTYARD_Y)
 	guard_entity.initialize(grid_manager, guard_grid_pos)
+	guard_entity.set_guard_type(csp_result.get("guard_type", "Infernal Knight"))
 	guard_entity.position.x = (GridManager.CENTER_X + 1.0) * ts
 
 func _cleanup_npcs() -> void:
@@ -445,7 +450,7 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 	if is_instance_valid(player_hud_panel):
 		player_hud_panel.visible = false
 
-	var overlay = PreBattleLoadingOverlay.new()
+	var overlay = PreBattleLoadingOverlayScript.new()
 	var enemy_title: String
 	var enemy_elem: String
 	var enemy_wep: String
@@ -523,6 +528,77 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 	)
 
 	add_child(overlay)
+
+func test_direct_battle(enemy_t: String, guard_arch: String = "") -> void:
+	if is_in_battle:
+		return
+	var config: Dictionary = {}
+	var p_stats: Dictionary = GameState.get_player_combat_stats()
+	var def_cb: Callable = func(_winner: String):
+		is_in_battle = false
+		player.is_active = true
+		if demon and not GameState.boss_defeated:
+			demon.is_active = true
+		if is_instance_valid(player_hud_panel):
+			player_hud_panel.visible = true
+			_update_player_stats_hud()
+		encounter_cooldown = 1.0
+
+	match enemy_t:
+		"minion":
+			config = {
+				"enemy_type": "minion",
+				"enemy_name": "Lesser Imp",
+				"npc_hp": 60, "npc_max_hp": 60,
+				"npc_atk": 12, "npc_heavy_atk": 22, "npc_def": 2,
+				"npc_potions": 1, "npc_potion_heal": 20, "minimax_depth": 2,
+				"player_hp": p_stats.get("hp", 100), "player_max_hp": p_stats.get("max_hp", 100),
+				"player_potions": p_stats.get("potions", 1), "player_atk": p_stats.get("attack", 20),
+				"player_heavy_atk": int(p_stats.get("attack", 20) * 1.8), "player_potion_heal": 30,
+				"gate_seal": "", "boss_weapon": "", "enemy_strategy": "AGGRESSIVE",
+				"gate_seal_effect": "", "boss_weapon_effect": "",
+				"ai_eval_func": MinimaxSolver.EvalFunc.AGGRESSIVE, "ai_action_order": MinimaxSolver.ActionOrder.AGGRESSIVE
+			}
+		"guard":
+			var g_name: String = guard_arch if guard_arch.length() > 0 else str(csp_result.get("guard_type", "Infernal Knight"))
+			var seal: String = "Seal of Flame"
+			var strat: String = "AGGRESSIVE"
+			if "shaman" in g_name.to_lower():
+				seal = "Seal of Shadow"
+				strat = "DEFENSIVE"
+			elif "gargoyle" in g_name.to_lower():
+				seal = "Seal of Blood"
+				strat = "TACTICAL"
+			config = {
+				"enemy_type": "guard",
+				"enemy_name": "Hell Guard (%s)" % g_name,
+				"npc_hp": 120, "npc_max_hp": 120,
+				"npc_atk": 18, "npc_heavy_atk": 30, "npc_def": 5,
+				"npc_potions": 1, "npc_potion_heal": 25, "minimax_depth": 3,
+				"player_hp": p_stats.get("hp", 100), "player_max_hp": p_stats.get("max_hp", 100),
+				"player_potions": p_stats.get("potions", 1), "player_atk": p_stats.get("attack", 20),
+				"player_heavy_atk": int(p_stats.get("attack", 20) * 1.8), "player_potion_heal": 30,
+				"gate_seal": seal, "boss_weapon": "", "enemy_strategy": strat,
+				"gate_seal_effect": "Medan Segel %s Aktif" % seal, "boss_weapon_effect": "",
+				"ai_eval_func": MinimaxSolver.EvalFunc.DEFENSIVE if strat == "DEFENSIVE" else MinimaxSolver.EvalFunc.WEIGHTED,
+				"ai_action_order": MinimaxSolver.ActionOrder.DEFAULT
+			}
+		"boss":
+			var b_wep: String = csp_result.get("boss_weapon", "Flame Scythe")
+			config = {
+				"enemy_type": "boss",
+				"enemy_name": "Demon Boss (%s)" % b_wep,
+				"npc_hp": 180, "npc_max_hp": 180,
+				"npc_atk": 25, "npc_heavy_atk": 42, "npc_def": 6,
+				"npc_potions": 2, "npc_potion_heal": 35, "minimax_depth": 3,
+				"player_hp": p_stats.get("hp", 100), "player_max_hp": p_stats.get("max_hp", 100),
+				"player_potions": p_stats.get("potions", 1), "player_atk": p_stats.get("attack", 20),
+				"player_heavy_atk": int(p_stats.get("attack", 20) * 1.8), "player_potion_heal": 30,
+				"gate_seal": "", "boss_weapon": b_wep, "enemy_strategy": "AGGRESSIVE",
+				"gate_seal_effect": "", "boss_weapon_effect": "Infernal Burn Active",
+				"ai_eval_func": MinimaxSolver.EvalFunc.AGGRESSIVE, "ai_action_order": MinimaxSolver.ActionOrder.AGGRESSIVE
+			}
+	_start_battle_encounter(config, def_cb)
 
 func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> void:
 	is_in_battle = true
@@ -681,6 +757,8 @@ func _build_debug_hud() -> void:
 	_add_debug_btn(btn_grid, "Re-solve CSP", func():
 		csp_result = csp_solver.solve(true, true, true, true)
 		GameState.gate_req_level = csp_result.get("gate_req", 2)
+		if is_instance_valid(guard_entity):
+			guard_entity.set_guard_type(csp_result.get("guard_type", "Infernal Knight"))
 		_show_floating_alert("CSP Baru: %s [%s] | %s | %s [%s]" % [
 			csp_result.get("guard_type", ""), csp_result.get("guard_strategy", ""),
 			csp_result.get("gate_seal", ""),
@@ -689,17 +767,53 @@ func _build_debug_hud() -> void:
 		_update_debug_hud()
 	)
 
-	_add_debug_btn(btn_grid, "Set: Shaman", func():
-		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Abyssal Shaman"})
-		GameState.gate_req_level = csp_result.get("gate_req", 2)
-		_show_floating_alert("Guard: Abyssal Shaman! Segel: %s | Boss: %s [%s]" % [
-			csp_result.get("gate_seal", ""), csp_result.get("boss_weapon", ""), csp_result.get("boss_strategy", "")
-		], Color(0.8, 0.5, 1.0))
+	# Overworld Guard & Teleport Buttons
+	_add_debug_btn(btn_grid, "[TP] To Guard", func():
+		if is_instance_valid(player) and is_instance_valid(guard_entity):
+			player.set_grid_position(guard_grid_pos + Vector2i(0, 1))
+			_show_floating_alert("Teleport ke Gerbang Istana (Hell Guard)", Color(0.3, 0.9, 1.0))
+	)
+
+	_add_debug_btn(btn_grid, "Guard: Knight", func():
+		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Infernal Knight"})
+		if is_instance_valid(guard_entity): guard_entity.set_guard_type("Infernal Knight")
+		_show_floating_alert("Guard Diubah: Infernal Knight (Api)", Color(1.0, 0.4, 0.1))
 		_update_debug_hud()
 	)
 
-	_add_debug_btn(btn_grid, "Test Balancer", func():
-		_open_pre_battle_overlay("guard", guard_entity)
+	_add_debug_btn(btn_grid, "Guard: Shaman", func():
+		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Abyssal Shaman"})
+		if is_instance_valid(guard_entity): guard_entity.set_guard_type("Abyssal Shaman")
+		_show_floating_alert("Guard Diubah: Abyssal Shaman (Void)", Color(0.8, 0.4, 1.0))
+		_update_debug_hud()
+	)
+
+	_add_debug_btn(btn_grid, "Guard: Gargoyle", func():
+		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Obsidian Gargoyle"})
+		if is_instance_valid(guard_entity): guard_entity.set_guard_type("Obsidian Gargoyle")
+		_show_floating_alert("Guard Diubah: Obsidian Gargoyle (Blood)", Color(0.9, 0.2, 0.2))
+		_update_debug_hud()
+	)
+
+	# Direct Battle Test Buttons (Testing All Portraits & VFX Instantly!)
+	_add_debug_btn(btn_grid, "[TEST] Duel Minion", func():
+		test_direct_battle("minion")
+	)
+
+	_add_debug_btn(btn_grid, "[TEST] Duel Knight", func():
+		test_direct_battle("guard", "Infernal Knight")
+	)
+
+	_add_debug_btn(btn_grid, "[TEST] Duel Shaman", func():
+		test_direct_battle("guard", "Abyssal Shaman")
+	)
+
+	_add_debug_btn(btn_grid, "[TEST] Duel Gargoyle", func():
+		test_direct_battle("guard", "Obsidian Gargoyle")
+	)
+
+	_add_debug_btn(btn_grid, "[TEST] Duel Boss", func():
+		test_direct_battle("boss")
 	)
 
 	_add_debug_btn(btn_grid, "Auto-Lv Cheat", func():

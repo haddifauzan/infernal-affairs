@@ -74,7 +74,7 @@ High resolution stylized clean vector 2D game art, sharp outlines, vibrant glowi
 ```text
 A clean 2D game boss weapon sprite sheet containing 3 colossal legendary underworld weapons in a row, isolated on solid plain white background:
 1. Flame Scythe: Gigantic grim reaper scythe forged from demon bone with a massive curved blade made of roaring hellfire.
-2. Shadow Blade: Elegant terrifying dark-matter katana with ethereal black-purple void smoke trailing from the edge.
+2. Cursed Blade: Terrifying jagged dark-matter obsidian cursed sword pulsing with necrotic purple soul-draining energy and glowing cursed runes along the blade edge.
 3. Blood Trident: Colossal three-pronged demonic trident made of dark crimson obsidian with glowing magma spikes.
 High resolution stylized RPG fantasy game assets, glowing runes, sharp clean borders, isolated on plain white background --v 6.0 --ar 3:1
 ```
@@ -121,7 +121,7 @@ High resolution stylized RPG fantasy game assets, glowing runes, sharp clean bor
 * **Prompt AI:**
 ```text
 A clean 2D game UI icon sheet of 3 ancient circular demonic magical seals in a horizontal row, dark fantasy RPG theme, isolated on solid plain white background:
-1. Seal of Fire: Glowing burning red circular runic glyph with flame patterns and molten rock bezel.
+1. Seal of Flame: Glowing burning infernal red circular runic glyph with roaring fire patterns and molten rock bezel.
 2. Seal of Shadow: Dark violet and black cosmic circular seal with glowing arcane eye and void tendrils.
 3. Seal of Blood: Crimson gothic circular seal with demonic bat-wing engravings and glowing blood runes.
 High resolution stylized clean vector UI icons, high contrast, glowing magical borders, perfectly spaced --v 6.0 --ar 3:1
@@ -153,6 +153,60 @@ Row 3 (Obsidian Gargoyle Archetype):
 8. Menacing grey stone gargoyle with glowing purple eyes holding a void staff.
 9. Menacing grey stone gargoyle holding a giant spiked magma chaos mace.
 Consistent stylized 2D digital art style, high contrast, clean square icon frames, game ready HUD portraits, no background noise --v 6.0 --ar 1:1
+```
+
+---
+
+## 5.6 Kategori Standing Battle Portraits (Arena Duel Turn-Based)
+
+> 💡 **Perbedaan Battle Portrait vs Avatar:**  
+> Avatar (`avatar_*.png`) adalah foto profil bulat kecil $64 \times 64$ untuk kartu HP di atas layar. Sedangkan **Battle Portrait** (`*_portrait.png`) adalah ilustrasi karakter berdiri penuh ukuran besar ($256 \times 256$ / $512 \times 512$) di atas panggung arena pertarungan turn-based menghadap lawan (menghadap kiri ke arah pemain).
+
+### 11. minion_portrait.png (Full Battle Stance Minion Imp - Kroco / Low-Level Monster)
+* **Target File:** ssets/sprites/characters/minion/minion_portrait.png
+* **Format:** Full Standing Illustration / Battle Portrait (256x256 atau 512x512)
+* **Status:** Selesai / Terintegrasi (Ekstraksi Spritesheet Aktif, Siap HD Remaster)
+* **Karakteristik Visual In-Game:** Berukuran kecil/kroco (goblin-sized), kepala bulat besar dengan kuping lancip panjang, mata kuning menyala usil/tengil, bertanduk kecil melengkung, tubuh mungil agak buncit memakai cawat kain cokelat compang-camping, ekor panah iblis kecil, **TANPA SAYAP**, dan bukan iblis berotot kekar.
+* **Prompt AI Rekomendasi (Akurat Sesuai In-Game Sprite):**
+`	ext
+2D stylized RPG game battle portrait of a tiny mischievous lesser imp demon, small stubby goblin-sized creature standing in a cheeky combat stance facing left, oversized round head with smooth bright red skin, pair of short ridged dark horns, big pointed elf ears, large glowing bright yellow eyes, mischievous sharp-toothed grin, small chubby body with little limbs, wearing a simple tattered brown cloth loincloth, thin pointy devil tail with arrow tip, NO wings, clean 2D game character art, bright vibrant colors, high contrast, isolated on solid plain white background, full body illustration, no floor shadow --v 6.0 --ar 1:1
+`
+* **Negative Prompt (Wajib Digunakan agar Tidak Terlalu Seram / Kekar):**
+`	ext
+wings, bat wings, dragon wings, muscular, buff, ripped six-pack, tall, giant monster, scary raid boss, demonic armor, rock armor, photorealistic, complex background, shadow on floor, realistic human anatomy
+`
+
+---
+
+### 12. `guard_portrait.png` / `guard_knight_portrait.png` (Infernal Knight Battle Stance)
+* **Target File:** `assets/sprites/characters/guard/guard_portrait.png`
+* **Format:** Full Standing Illustration / Battle Portrait (256x256 atau 512x512)
+* **Status:** Selesai / Terintegrasi (Ekstraksi Spritesheet Aktif, Siap HD Remaster)
+* **Prompt AI (HD Remaster):**
+```text
+2D stylized dark fantasy game battle portrait of an elite hell gatekeeper knight, standing battle stance facing left towards opponent, wearing menacing heavy black spiked obsidian plate armor with molten lava veins, horned dark steel helm with glowing red eye slits, holding a heavy tower shield in front and a massive flaming broadsword ablaze with roaring orange fire. High quality 2D RPG turn-based duel character art, sharp clean outlines, epic infernal lighting, isolated on solid plain white background, full body illustration --v 6.0 --ar 1:1
+```
+
+---
+
+### 13. `guard_shaman_portrait.png` (Abyssal Shaman Battle Stance)
+* **Target File:** `assets/sprites/characters/guard/guard_shaman_portrait.png`
+* **Format:** Full Standing Illustration / Battle Portrait (256x256 atau 512x512)
+* **Status:** Siap Generate
+* **Prompt AI:**
+```text
+2D stylized dark fantasy game battle portrait of a sinister abyssal demonic shaman sorcerer, levitating floating stance facing left towards opponent, tattered dark purple and obsidian-black hooded robes, demonic horned bone skull mask, glowing ethereal violet void magic swirling around hands and ancient gnarly crystal staff topped with a hovering pulsing purple dark-matter orb. Clean 2D turn-based RPG battle character art, high contrast glowing magical aura, isolated on solid plain white background --v 6.0 --ar 1:1
+```
+
+---
+
+### 14. `guard_gargoyle_portrait.png` (Obsidian Gargoyle Battle Stance)
+* **Target File:** `assets/sprites/characters/guard/guard_gargoyle_portrait.png`
+* **Format:** Full Standing Illustration / Battle Portrait (256x256 atau 512x512)
+* **Status:** Siap Generate
+* **Prompt AI:**
+```text
+2D stylized dark fantasy game battle portrait of a monstrous obsidian stone gargoyle guardian, hulking aggressive crouched stance facing left towards opponent, massive muscular volcanic rock body, broad stone gargoyle wings spread, glowing molten crimson eyes and magma fissures along chest and shoulders, gripping a colossal spiked volcanic stone war mace with burning red cracks. Clean 2D turn-based RPG battle character art, heavy dark fantasy aesthetic, isolated on solid plain white background --v 6.0 --ar 1:1
 ```
 
 ---

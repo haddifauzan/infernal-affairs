@@ -140,6 +140,8 @@ func solve(use_mrv: bool = true, use_lcv: bool = true, use_ac3: bool = true, ran
 
 	# Randomize domain order for diverse playthroughs
 	if randomize:
+		if not overrides.has("guard_type"):
+			domains["guard_type"] = [GUARD_TYPES.pick_random()]
 		for k in domains:
 			if not overrides.has(k):
 				domains[k].shuffle()

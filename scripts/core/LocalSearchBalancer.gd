@@ -127,7 +127,7 @@ static func get_initial_state(enemy_type: String, p_stats: Dictionary = {}) -> D
 
 ## Clamps state parameters to their valid domain ranges (using optional dynamic bounds).
 static func clamp_state(s: Dictionary, bounds: Dictionary = {}) -> Dictionary:
-	var c := s.duplicate()
+	var c: Dictionary = s.duplicate()
 	var h_min: int = bounds.get("hp_min", HP_MIN)
 	var h_max: int = bounds.get("hp_max", HP_MAX)
 	var a_min: int = bounds.get("atk_min", ATK_MIN)
@@ -178,7 +178,7 @@ static func get_all_neighbours(current: Dictionary, bounds: Dictionary = {}) -> 
 	]
 
 	for d in deltas:
-		var n := current.duplicate()
+		var n: Dictionary = current.duplicate()
 		n[d["key"]] += d["delta"]
 		n = clamp_state(n, bounds)
 		n["_action_desc"] = d["desc"]
@@ -188,7 +188,7 @@ static func get_all_neighbours(current: Dictionary, bounds: Dictionary = {}) -> 
 
 ## Generates a single random neighbour for Simulated Annealing.
 static func get_random_neighbour(current: Dictionary, bounds: Dictionary = {}) -> Dictionary:
-	var n := current.duplicate()
+	var n: Dictionary = current.duplicate()
 	var choice: int = randi() % 6
 	var desc: String = ""
 

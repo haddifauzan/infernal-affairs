@@ -13,6 +13,7 @@ signal player_died
 
 # --- Player Stats ---
 var level: int = 1
+@warning_ignore("shadowed_global_identifier")
 var exp: int = 0
 var hp: int = 100
 var max_hp: int = 100
@@ -161,4 +162,14 @@ func get_status_summary() -> Dictionary:
 		"gate_open": gate_is_open,
 		"guard_defeated": guard_defeated,
 		"boss_defeated": boss_defeated
+	}
+
+## Get player combat stats dictionary for duels and local search balancer.
+func get_player_combat_stats() -> Dictionary:
+	return {
+		"hp": hp,
+		"max_hp": max_hp,
+		"potions": potions,
+		"attack": attack,
+		"defense": defense
 	}
