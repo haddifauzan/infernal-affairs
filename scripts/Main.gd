@@ -2,6 +2,7 @@ class_name MainScene
 extends Node2D
 
 const PreBattleLoadingOverlayScript = preload("res://scripts/UI/PreBattleLoadingOverlay.gd")
+const PreBattleBriefingModalScript = preload("res://scripts/UI/PreBattleBriefingModal.gd")
 
 ## Main scene orchestrator for Infernal Affairs - Tahap 3 (Expanded 44x46 Layout).
 ## Manages 2-map 3-zone world, NPC entities (Minion, Guard, Boss), encounter flow,
@@ -36,12 +37,15 @@ var spawned_minions: Array[MinionEntity] = []
 var guard_entity: GuardEntity = null
 const MINION_COUNT: int = 5
 
-# --- Tahap 3: Map Props (Gate, Throne, Warning Sign) ---
+# --- Tahap 3: Map Props (Gate, Throne, Warning Sign, CSP Seal) ---
 var gate_sprite: Sprite2D = null
+var gate_seal_sprite: Sprite2D = null
+var gate_seal_label: Label = null
 var gate_closed_tex: Texture2D
 var gate_open_tex: Texture2D
 var warning_sign_sprite: Sprite2D = null
 var throne_sprite: Sprite2D = null
+var pre_battle_briefing_modal: PreBattleBriefingModal = null
 
 # --- Tahap 3: Audio ---
 var sfx_level_up: AudioStream
@@ -67,9 +71,20 @@ var hud_exp_bar: ProgressBar
 var hud_exp_label: Label
 var hud_stats_label: Label
 var hud_key_badge: Label
+var hud_key_icon: TextureRect
+var hud_gate_badge: Label
 var hud_cheat_btn: Button
 var hud_auto_btn: Button
 var cheat_auto_level_enabled: bool = false
+
+# --- Tahap 3: Gate Scouting Modal ---
+var gate_scout_modal: PanelContainer = null
+var scout_cooldown: float = 0.0
+
+# --- Tahap 3: Roaming Pause & Concept Presentation ---
+var is_game_paused: bool = false
+var pause_modal: Control = null
+var hud_pause_btn: Button
 
 # --- Tahap 3: Floating Alert ---
 var floating_label: Label = null
@@ -108,6 +123,15 @@ func _ready() -> void:
 	grid_manager.grid_updated.connect(_on_grid_updated)
 	player.moved.connect(_on_player_moved_tahap3)
 
+	# Process modes for pause handling (Main stays active to manage UI & inputs)
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	if player: player.process_mode = Node.PROCESS_MODE_PAUSABLE
+	if demon: demon.process_mode = Node.PROCESS_MODE_PAUSABLE
+	if has_node("ArenaMap"): $ArenaMap.process_mode = Node.PROCESS_MODE_PAUSABLE
+	if has_node("FrontierVisualizer"): $FrontierVisualizer.process_mode = Node.PROCESS_MODE_PAUSABLE
+	if has_node("PathDotVisualizer"): $PathDotVisualizer.process_mode = Node.PROCESS_MODE_PAUSABLE
+	if has_node("CanvasLayer"): $CanvasLayer.process_mode = Node.PROCESS_MODE_ALWAYS
+
 	# Connect Demon Boss Pathfinding & Encounter signals
 	demon.path_updated.connect(_on_demon_path_updated)
 	demon.caught_player.connect(_on_demon_caught_player)
@@ -142,8 +166,21 @@ func _ready() -> void:
 func start_new_game() -> void:
 	is_game_over = false
 	is_in_battle = false
+	is_game_paused = false
+	get_tree().paused = false
 	boss_bgm_playing = false
 	encounter_cooldown = 0.0
+
+	# Cleanup modals if open
+	if is_instance_valid(pause_modal):
+		pause_modal.queue_free()
+		pause_modal = null
+	if is_instance_valid(gate_scout_modal):
+		gate_scout_modal.queue_free()
+		gate_scout_modal = null
+	if is_instance_valid(pre_battle_briefing_modal):
+		pre_battle_briefing_modal.queue_free()
+		pre_battle_briefing_modal = null
 
 	# Stop BGM
 	if bgm_player:
@@ -162,7 +199,8 @@ func start_new_game() -> void:
 	# Solve CSP for Castle Defense Assignment (Triplets <X, D, C> with MRV, LCV, AC-3)
 	csp_result = csp_solver.solve(true, true, true, true)
 	GameState.gate_req_level = csp_result.get("gate_req", 2)
-	if is_instance_valid(guard_entity): guard_entity.set_guard_type(csp_result.get("guard_type", "Infernal Knight"))
+	if is_instance_valid(guard_entity):
+		guard_entity.set_guard_config(csp_result.get("guard_type", "Infernal Knight"), csp_result.get("guard_strategy", "Aggressive"), csp_result.get("gate_seal", "Seal of Flame"))
 
 	# Generate expanded 2-map 3-zone layout
 	grid_manager.generate_new_map()
@@ -184,6 +222,7 @@ func start_new_game() -> void:
 	demon.is_active = true
 	demon.modulate.a = 1.0
 	demon.set_algorithm(current_algorithm)
+	demon.set_boss_config(csp_result.get("boss_weapon", "Flame Scythe"), csp_result.get("boss_strategy", "Tactical"))
 
 	# Spawn Minions with Player reference and active algorithm
 	_spawn_minions()
@@ -216,6 +255,7 @@ func _spawn_minions() -> void:
 	for i in range(MINION_COUNT):
 		var minion: MinionEntity = minion_scene.instantiate() as MinionEntity
 		minion.name = "Minion_%d" % i
+		minion.process_mode = Node.PROCESS_MODE_PAUSABLE
 		add_child(minion)
 
 		var pos = grid_manager.get_random_wilderness_pos()
@@ -227,12 +267,13 @@ func _spawn_minions() -> void:
 func _spawn_guard() -> void:
 	guard_entity = guard_scene.instantiate() as GuardEntity
 	guard_entity.name = "Guard"
+	guard_entity.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(guard_entity)
 
 	var ts: float = float(grid_manager.tile_size)
 	guard_grid_pos = Vector2i(GridManager.CENTER_X, GridManager.COURTYARD_Y)
 	guard_entity.initialize(grid_manager, guard_grid_pos)
-	guard_entity.set_guard_type(csp_result.get("guard_type", "Infernal Knight"))
+	guard_entity.set_guard_config(csp_result.get("guard_type", "Infernal Knight"), csp_result.get("guard_strategy", "Aggressive"), csp_result.get("gate_seal", "Seal of Flame"))
 	guard_entity.position.x = (GridManager.CENTER_X + 1.0) * ts
 
 func _cleanup_npcs() -> void:
@@ -248,6 +289,12 @@ func _cleanup_map_props() -> void:
 	if is_instance_valid(gate_sprite):
 		gate_sprite.queue_free()
 		gate_sprite = null
+	if is_instance_valid(gate_seal_sprite):
+		gate_seal_sprite.queue_free()
+		gate_seal_sprite = null
+	if is_instance_valid(gate_seal_label):
+		gate_seal_label.queue_free()
+		gate_seal_label = null
 	if is_instance_valid(warning_sign_sprite):
 		warning_sign_sprite.queue_free()
 		warning_sign_sprite = null
@@ -270,6 +317,45 @@ func _place_map_props() -> void:
 	gate_sprite.scale = Vector2(0.30, 0.30)
 	gate_sprite.z_index = int((GridManager.GATE_Y + 1.0) * ts)
 	add_child(gate_sprite)
+
+	# 1b. Gate Magical Seal (CSP Relational Visual from seals_gate_sheet.png)
+	var seal_sheet = load("res://assets/sprites/map/obstacles/seals_gate_sheet.png")
+	if seal_sheet and not GameState.gate_is_open:
+		var seal_name: String = csp_result.get("gate_seal", "Seal of Flame")
+		var col_idx: int = 0
+		var seal_glow: Color = Color(1.0, 0.45, 0.15, 0.95)
+		if "shadow" in seal_name.to_lower():
+			col_idx = 1
+			seal_glow = Color(0.75, 0.2, 1.0, 0.95)
+		elif "blood" in seal_name.to_lower():
+			col_idx = 2
+			seal_glow = Color(1.0, 0.15, 0.25, 0.95)
+
+		var frame_w = 413.0 / 3.0
+		var atlas = AtlasTexture.new()
+		atlas.atlas = seal_sheet
+		atlas.region = Rect2(col_idx * frame_w, 0, frame_w, 138)
+
+		gate_seal_sprite = Sprite2D.new()
+		gate_seal_sprite.texture = atlas
+		gate_seal_sprite.position = Vector2(center_x_world, (GridManager.GATE_Y - 0.25) * ts)
+		gate_seal_sprite.scale = Vector2(0.32, 0.32)
+		gate_seal_sprite.z_index = int((GridManager.GATE_Y + 1.0) * ts) + 2
+		gate_seal_sprite.modulate = seal_glow
+		add_child(gate_seal_sprite)
+
+		gate_seal_label = Label.new()
+		gate_seal_label.text = "✦ %s ✦" % seal_name.to_upper()
+		gate_seal_label.add_theme_font_size_override("font_size", 9)
+		gate_seal_label.add_theme_color_override("font_color", seal_glow)
+		gate_seal_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+		gate_seal_label.add_theme_constant_override("shadow_offset_x", 1)
+		gate_seal_label.add_theme_constant_override("shadow_offset_y", 1)
+		gate_seal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		gate_seal_label.position = Vector2(center_x_world - 80, (GridManager.GATE_Y - 1.35) * ts)
+		gate_seal_label.size = Vector2(160, 20)
+		gate_seal_label.z_index = gate_seal_sprite.z_index + 1
+		add_child(gate_seal_label)
 
 	# 2. Gate Warning Sign
 	var warn_tex = load("res://assets/sprites/map/obstacles/gate_warning_sign.png")
@@ -320,14 +406,14 @@ func _on_demon_path_updated(result: Dictionary) -> void:
 		]
 
 func _on_demon_caught_player() -> void:
-	if not GameState.boss_defeated:
+	if not GameState.boss_defeated and not is_game_paused:
 		_trigger_encounter("boss", demon)
 
 # ---------------------------------------------------------------
 # PLAYER MOVEMENT & ENCOUNTER CHECK
 # ---------------------------------------------------------------
 func _on_player_moved_tahap3(new_pos: Vector2i) -> void:
-	if is_in_battle or is_game_over:
+	if is_in_battle or is_game_over or is_game_paused:
 		return
 
 	# Proximity check with Minions (Wilderness)
@@ -351,13 +437,7 @@ func _on_player_moved_tahap3(new_pos: Vector2i) -> void:
 					GameState.gate_req_level, GameState.level
 				], Color(1.0, 0.35, 0.35))
 		elif new_pos.y == GridManager.COURTYARD_Y and (new_pos.x == GridManager.CENTER_X - 2 or new_pos.x == GridManager.CENTER_X - 3):
-			var seal = csp_result.get("gate_seal", "Seal of Flame")
-			var g_type = csp_result.get("guard_type", "Infernal Knight")
-			var g_strat = csp_result.get("guard_strategy", "Aggressive")
-			var b_wep = csp_result.get("boss_weapon", "Flame Scythe")
-			_show_floating_alert("📜 INTEL GERBANG: Segel [%s] | Penjaga: %s [%s] | Resonansi Bos: [%s]" % [
-				seal, g_type, g_strat, b_wep
-			], Color(1.0, 0.85, 0.3))
+			_show_gate_scouting_modal()
 
 	# Entering Castle -> Play Boss BGM
 	if GameState.gate_is_open and new_pos.y <= GridManager.CASTLE_Y_MAX and not boss_bgm_playing:
@@ -418,10 +498,14 @@ func _handle_minion_encounter(minion: MinionEntity) -> void:
 				_show_floating_alert("LEVEL UP! Naik ke Level %d! Syarat Gerbang Terpenuhi!" % GameState.level, Color(1.0, 0.85, 0.0))
 			else:
 				_show_floating_alert("Minion Dikalahkan! +50 EXP (%d/100)" % GameState.exp, Color(0.3, 1.0, 0.5))
+		elif winner == "retreat":
+			GameState.hp = maxi(20, int(GameState.max_hp * 0.5))
+			GameState.hp_changed.emit(GameState.hp)
+			_show_floating_alert("Kamu mundur dari Minion untuk memulihkan diri! (HP 50%)", Color(1.0, 0.65, 0.2))
 		else:
 			GameState.hp = maxi(20, int(GameState.max_hp * 0.5))
 			GameState.hp_changed.emit(GameState.hp)
-			_show_floating_alert("Kamu mundur dari Minion untuk memulihkan diri! (HP 50%)", Color(1.0, 0.35, 0.35))
+			_show_floating_alert("Kamu dipukul mundur oleh Minion! (HP 50%)", Color(1.0, 0.35, 0.35))
 	)
 
 func _handle_guard_encounter(guard: GuardEntity) -> void:
@@ -431,7 +515,7 @@ func _handle_guard_encounter(guard: GuardEntity) -> void:
 		], Color(1.0, 0.35, 0.35))
 		return
 
-	_open_pre_battle_overlay("guard", guard)
+	_show_pre_battle_briefing("guard", guard)
 
 func _handle_boss_encounter() -> void:
 	if GameState.boss_defeated:
@@ -440,7 +524,64 @@ func _handle_boss_encounter() -> void:
 		_show_floating_alert("Pintu Tahta Terkunci! Kalahkan Penjaga Gerbang terlebih dahulu!", Color(1.0, 0.35, 0.35))
 		return
 
-	_open_pre_battle_overlay("boss", demon)
+	_show_pre_battle_briefing("boss", demon)
+
+func _show_pre_battle_briefing(type: String, enemy_node: Node2D) -> void:
+	is_in_battle = true
+	player.is_active = false
+	if demon:
+		demon.is_active = false
+	if is_instance_valid(player_hud_panel):
+		player_hud_panel.visible = false
+
+	if is_instance_valid(pre_battle_briefing_modal):
+		pre_battle_briefing_modal.queue_free()
+
+	pre_battle_briefing_modal = PreBattleBriefingModalScript.new()
+	var enemy_title: String
+	var enemy_elem: String
+	var enemy_wep: String
+	var csp_extra: Dictionary = {}
+
+	if type == "guard":
+		var g_type: String = csp_result.get("guard_type", "Infernal Knight")
+		enemy_title = "Hell Guard (%s)" % g_type
+		enemy_elem = csp_result.get("guard_element", "Fire")
+		enemy_wep = "Beban Segel: %s" % csp_result.get("gate_seal", "Seal of Flame")
+		csp_extra = csp_result.duplicate()
+		csp_extra["strategy"] = csp_result.get("guard_strategy", "Aggressive")
+		csp_extra["strategy_desc"] = csp_result.get("guard_strategy_desc", "")
+		csp_extra["eval_func"] = csp_result.get("guard_eval_func", 1)
+		csp_extra["action_order"] = csp_result.get("guard_action_order", 1)
+	else: # "boss"
+		var b_wep: String = csp_result.get("boss_weapon", "Flame Scythe")
+		enemy_title = "Demon Lord (%s)" % b_wep
+		enemy_elem = csp_result.get("boss_element", "Fire")
+		enemy_wep = b_wep
+		csp_extra = csp_result.duplicate()
+		csp_extra["strategy"] = csp_result.get("boss_strategy", "Tactical")
+		csp_extra["strategy_desc"] = csp_result.get("boss_strategy_desc", "")
+		csp_extra["eval_func"] = csp_result.get("boss_eval_func", 3)
+		csp_extra["action_order"] = csp_result.get("boss_action_order", 0)
+
+	pre_battle_briefing_modal.setup_briefing(type, enemy_title, enemy_elem, enemy_wep, csp_extra)
+
+	pre_battle_briefing_modal.continue_to_battle.connect(func():
+		_open_pre_battle_overlay(type, enemy_node)
+	)
+
+	pre_battle_briefing_modal.cancelled.connect(func():
+		is_in_battle = false
+		player.is_active = true
+		if demon and not GameState.boss_defeated:
+			demon.is_active = true
+		if is_instance_valid(player_hud_panel):
+			player_hud_panel.visible = true
+			_update_player_stats_hud()
+		encounter_cooldown = ENCOUNTER_COOLDOWN_TIME
+	)
+
+	add_child(pre_battle_briefing_modal)
 
 func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 	is_in_battle = true
@@ -461,27 +602,21 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 		enemy_title = "Hell Guard (%s)" % g_type
 		enemy_elem = csp_result.get("guard_element", "Fire")
 		enemy_wep = "Beban Segel: %s" % csp_result.get("gate_seal", "Seal of Flame")
-		csp_extra = {
-			"strategy": csp_result.get("guard_strategy", "Aggressive"),
-			"strategy_desc": csp_result.get("guard_strategy_desc", ""),
-			"eval_func": csp_result.get("guard_eval_func", 1),
-			"action_order": csp_result.get("guard_action_order", 1),
-			"gate_seal": csp_result.get("gate_seal", "Seal of Flame"),
-			"gate_seal_effect": csp_result.get("gate_seal_effect", "")
-		}
+		csp_extra = csp_result.duplicate()
+		csp_extra["strategy"] = csp_result.get("guard_strategy", "Aggressive")
+		csp_extra["strategy_desc"] = csp_result.get("guard_strategy_desc", "")
+		csp_extra["eval_func"] = csp_result.get("guard_eval_func", 1)
+		csp_extra["action_order"] = csp_result.get("guard_action_order", 1)
 	else: # "boss"
 		var b_wep: String = csp_result.get("boss_weapon", "Flame Scythe")
 		enemy_title = "Demon Lord (%s)" % b_wep
 		enemy_elem = csp_result.get("boss_element", "Fire")
 		enemy_wep = b_wep
-		csp_extra = {
-			"strategy": csp_result.get("boss_strategy", "Tactical"),
-			"strategy_desc": csp_result.get("boss_strategy_desc", ""),
-			"eval_func": csp_result.get("boss_eval_func", 3),
-			"action_order": csp_result.get("boss_action_order", 0),
-			"boss_weapon": b_wep,
-			"boss_weapon_effect": csp_result.get("boss_weapon_effect", "")
-		}
+		csp_extra = csp_result.duplicate()
+		csp_extra["strategy"] = csp_result.get("boss_strategy", "Tactical")
+		csp_extra["strategy_desc"] = csp_result.get("boss_strategy_desc", "")
+		csp_extra["eval_func"] = csp_result.get("boss_eval_func", 3)
+		csp_extra["action_order"] = csp_result.get("boss_action_order", 0)
 
 	overlay.setup_encounter(type, enemy_title, enemy_elem, enemy_wep, GameState.get_status_summary(), csp_extra)
 
@@ -494,6 +629,10 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 					GameState.award_guard_victory()
 					_play_sfx(sfx_level_up)
 					_show_floating_alert("Penjaga Dikalahkan! Castle Key Diperoleh! Naik ke Level 3! Gerbang Terbuka!", Color(1.0, 0.85, 0.0))
+				elif winner == "retreat":
+					GameState.hp = maxi(30, int(GameState.max_hp * 0.5))
+					GameState.hp_changed.emit(GameState.hp)
+					_show_floating_alert("Kamu mundur dari Penjaga Gerbang untuk mengatur ulang strategi! (HP 50%)", Color(1.0, 0.65, 0.2))
 				else:
 					GameState.hp = maxi(30, int(GameState.max_hp * 0.5))
 					GameState.hp_changed.emit(GameState.hp)
@@ -509,6 +648,10 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 					_play_sfx(sfx_level_up)
 					_show_floating_alert("BOS NERAKA DIKALAHKAN! KEMENANGAN MUTLAK!", Color(1.0, 0.85, 0.0))
 					info_label.text = "VICTORY! Istana Neraka Ditaklukkan! [R] Main Ulang"
+				elif winner == "retreat":
+					GameState.hp = maxi(40, int(GameState.max_hp * 0.5))
+					GameState.hp_changed.emit(GameState.hp)
+					_show_floating_alert("Kamu mundur dari Bos Neraka untuk mengatur ulang strategi! (HP 50%)", Color(1.0, 0.65, 0.2))
 				else:
 					GameState.hp = maxi(40, int(GameState.max_hp * 0.5))
 					GameState.hp_changed.emit(GameState.hp)
@@ -615,6 +758,11 @@ func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> vo
 	battle_hud.name = "BattleHUD"
 	battle_hud.init(battle_manager)
 
+	battle_hud.restart_requested.connect(func():
+		is_in_battle = false
+		start_new_game()
+	)
+
 	battle_hud.battle_hud_closed.connect(func(winner: String):
 		is_in_battle = false
 		player.is_active = true
@@ -636,6 +784,21 @@ func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> vo
 # ---------------------------------------------------------------
 func _on_gate_unlocked() -> void:
 	_play_sfx(sfx_gate_unlock)
+	if is_instance_valid(gate_seal_sprite):
+		var stw = create_tween()
+		stw.tween_property(gate_seal_sprite, "scale", Vector2(0.65, 0.65), 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		stw.parallel().tween_property(gate_seal_sprite, "modulate:a", 0.0, 0.45)
+		if is_instance_valid(gate_seal_label):
+			stw.parallel().tween_property(gate_seal_label, "modulate:a", 0.0, 0.35)
+		stw.tween_callback(func():
+			if is_instance_valid(gate_seal_sprite):
+				gate_seal_sprite.queue_free()
+				gate_seal_sprite = null
+			if is_instance_valid(gate_seal_label):
+				gate_seal_label.queue_free()
+				gate_seal_label = null
+		)
+
 	if gate_sprite and gate_open_tex:
 		gate_sprite.texture = gate_open_tex
 
@@ -758,7 +921,12 @@ func _build_debug_hud() -> void:
 		csp_result = csp_solver.solve(true, true, true, true)
 		GameState.gate_req_level = csp_result.get("gate_req", 2)
 		if is_instance_valid(guard_entity):
-			guard_entity.set_guard_type(csp_result.get("guard_type", "Infernal Knight"))
+			guard_entity.set_guard_config(csp_result.get("guard_type", "Infernal Knight"), csp_result.get("guard_strategy", "Aggressive"), csp_result.get("gate_seal", "Seal of Flame"))
+		if is_instance_valid(demon):
+			demon.set_boss_config(csp_result.get("boss_weapon", "Flame Scythe"), csp_result.get("boss_strategy", "Tactical"))
+		if not GameState.gate_is_open:
+			_cleanup_map_props()
+			_place_map_props()
 		_show_floating_alert("CSP Baru: %s [%s] | %s | %s [%s]" % [
 			csp_result.get("guard_type", ""), csp_result.get("guard_strategy", ""),
 			csp_result.get("gate_seal", ""),
@@ -776,22 +944,28 @@ func _build_debug_hud() -> void:
 
 	_add_debug_btn(btn_grid, "Guard: Knight", func():
 		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Infernal Knight"})
-		if is_instance_valid(guard_entity): guard_entity.set_guard_type("Infernal Knight")
-		_show_floating_alert("Guard Diubah: Infernal Knight (Api)", Color(1.0, 0.4, 0.1))
+		if is_instance_valid(guard_entity): guard_entity.set_guard_config("Infernal Knight", csp_result.get("guard_strategy", "Aggressive"), csp_result.get("gate_seal", "Seal of Flame"))
+		if is_instance_valid(demon): demon.set_boss_config(csp_result.get("boss_weapon", "Flame Scythe"), csp_result.get("boss_strategy", "Tactical"))
+		if not GameState.gate_is_open: _cleanup_map_props(); _place_map_props()
+		_show_floating_alert("Guard Diubah: Infernal Knight (Api) | Segel: %s" % csp_result.get("gate_seal", ""), Color(1.0, 0.4, 0.1))
 		_update_debug_hud()
 	)
 
 	_add_debug_btn(btn_grid, "Guard: Shaman", func():
 		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Abyssal Shaman"})
-		if is_instance_valid(guard_entity): guard_entity.set_guard_type("Abyssal Shaman")
-		_show_floating_alert("Guard Diubah: Abyssal Shaman (Void)", Color(0.8, 0.4, 1.0))
+		if is_instance_valid(guard_entity): guard_entity.set_guard_config("Abyssal Shaman", csp_result.get("guard_strategy", "Tactical"), csp_result.get("gate_seal", "Seal of Shadow"))
+		if is_instance_valid(demon): demon.set_boss_config(csp_result.get("boss_weapon", "Blood Trident"), csp_result.get("boss_strategy", "Aggressive"))
+		if not GameState.gate_is_open: _cleanup_map_props(); _place_map_props()
+		_show_floating_alert("Guard Diubah: Abyssal Shaman (Void) | Segel: %s" % csp_result.get("gate_seal", ""), Color(0.8, 0.4, 1.0))
 		_update_debug_hud()
 	)
 
 	_add_debug_btn(btn_grid, "Guard: Gargoyle", func():
 		csp_result = csp_solver.solve(true, true, true, false, {"guard_type": "Obsidian Gargoyle"})
-		if is_instance_valid(guard_entity): guard_entity.set_guard_type("Obsidian Gargoyle")
-		_show_floating_alert("Guard Diubah: Obsidian Gargoyle (Blood)", Color(0.9, 0.2, 0.2))
+		if is_instance_valid(guard_entity): guard_entity.set_guard_config("Obsidian Gargoyle", csp_result.get("guard_strategy", "Defensive"), csp_result.get("gate_seal", "Seal of Blood"))
+		if is_instance_valid(demon): demon.set_boss_config(csp_result.get("boss_weapon", "Flame Scythe"), csp_result.get("boss_strategy", "Tactical"))
+		if not GameState.gate_is_open: _cleanup_map_props(); _place_map_props()
+		_show_floating_alert("Guard Diubah: Obsidian Gargoyle (Batu) | Segel: %s" % csp_result.get("gate_seal", ""), Color(0.9, 0.2, 0.2))
 		_update_debug_hud()
 	)
 
@@ -894,6 +1068,38 @@ func _grid_distance(a: Vector2i, b: Vector2i) -> int:
 # ---------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
+		if is_in_battle:
+			return
+
+		# P key or Escape key to toggle Pause / Concept briefing
+		if event.keycode == KEY_P:
+			_toggle_pause_game()
+			return
+
+		if event.keycode == KEY_ESCAPE:
+			if is_instance_valid(gate_scout_modal):
+				gate_scout_modal.queue_free()
+				gate_scout_modal = null
+				return
+			if is_game_paused:
+				_resume_game()
+				return
+			else:
+				_pause_game()
+				return
+
+		if event.keycode == KEY_SPACE and is_instance_valid(gate_scout_modal):
+			gate_scout_modal.queue_free()
+			gate_scout_modal = null
+			return
+
+		# If game is currently paused, ignore normal roaming shortcuts except restart
+		if is_game_paused:
+			if event.keycode == KEY_R:
+				_resume_game()
+				start_new_game()
+			return
+
 		match event.keycode:
 			KEY_R:   start_new_game()
 			KEY_TAB: _toggle_algorithm()
@@ -930,12 +1136,22 @@ func _update_algo_label() -> void:
 		algo_label.modulate = Color("#00f5d4") if current_algorithm == "astar" else Color("#ffbe0b")
 
 func _physics_process(delta: float) -> void:
+	if is_game_paused:
+		return
+
 	if encounter_cooldown > 0.0:
 		encounter_cooldown = maxf(0.0, encounter_cooldown - delta)
+	if scout_cooldown > 0.0:
+		scout_cooldown = maxf(0.0, scout_cooldown - delta)
 
 	# Auto-level up cheat: ensures player level is always at least gate requirement
 	if cheat_auto_level_enabled and GameState.level < GameState.gate_req_level:
 		_cheat_level_up()
+
+	# Gate seal magical pulse
+	if is_instance_valid(gate_seal_sprite):
+		var spulse: float = 0.82 + sin(float(Time.get_ticks_msec()) / 220.0) * 0.18
+		gate_seal_sprite.modulate.a = spulse
 
 	# Camera smooth follow
 	if player and camera:
@@ -1028,6 +1244,18 @@ func _build_player_stats_hud() -> void:
 	hud_cheat_btn.pressed.connect(_cheat_level_up)
 	r1.add_child(hud_cheat_btn)
 
+	hud_pause_btn = Button.new()
+	hud_pause_btn.text = "⏸ Pause [P]"
+	hud_pause_btn.tooltip_text = "Pause Game & Briefing Konsep AI (Shortcut: P / ESC)"
+	hud_pause_btn.add_theme_font_size_override("font_size", 9)
+	hud_pause_btn.custom_minimum_size = Vector2(74, 20)
+	var pause_s := StyleBoxFlat.new()
+	pause_s.bg_color = Color(0.18, 0.42, 0.85, 0.95)
+	pause_s.set_corner_radius_all(4)
+	hud_pause_btn.add_theme_stylebox_override("normal", pause_s)
+	hud_pause_btn.pressed.connect(_toggle_pause_game)
+	r1.add_child(hud_pause_btn)
+
 	# Row 2: HP Bar
 	var hp_box := HBoxContainer.new()
 	right_vbox.add_child(hp_box)
@@ -1073,12 +1301,36 @@ func _build_player_stats_hud() -> void:
 	hud_stats_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
 	right_vbox.add_child(hud_stats_label)
 
-	# Row 5: Key Badge
+	# Row 5: Key Badge + Icon
+	var key_row := HBoxContainer.new()
+	key_row.add_theme_constant_override("separation", 6)
+	right_vbox.add_child(key_row)
+
+	hud_key_icon = TextureRect.new()
+	var key_tex = load("res://assets/sprites/ui/skills/icon_castle_key.png")
+	if key_tex:
+		hud_key_icon.texture = key_tex
+		hud_key_icon.custom_minimum_size = Vector2(16, 16)
+		hud_key_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		hud_key_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		hud_key_icon.modulate = Color(0.4, 0.4, 0.4, 0.6)
+	key_row.add_child(hud_key_icon)
+
 	hud_key_badge = Label.new()
-	hud_key_badge.text = "🔑 Castle Key: [Belum Didapat]"
+	hud_key_badge.text = "Castle Key: [LOCKED]"
 	hud_key_badge.add_theme_font_size_override("font_size", 9)
 	hud_key_badge.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	right_vbox.add_child(hud_key_badge)
+	key_row.add_child(hud_key_badge)
+
+	# Row 6: Gate Objective & CSP Seal
+	hud_gate_badge = Label.new()
+	hud_gate_badge.text = "🏰 Gerbang: Syarat Lv. %d | Segel: %s" % [
+		GameState.gate_req_level,
+		csp_result.get("gate_seal", "Seal of Flame")
+	]
+	hud_gate_badge.add_theme_font_size_override("font_size", 9)
+	hud_gate_badge.add_theme_color_override("font_color", Color(1.0, 0.75, 0.2))
+	right_vbox.add_child(hud_gate_badge)
 
 	_update_player_stats_hud()
 	_reposition_hud_panels()
@@ -1090,8 +1342,8 @@ func _reposition_hud_panels() -> void:
 	var vp_size: Vector2 = vp.get_visible_rect().size
 
 	if is_instance_valid(player_hud_panel):
-		var hud_w: float = 380.0
-		var hud_h: float = 145.0
+		var hud_w: float = 445.0
+		var hud_h: float = 165.0
 		player_hud_panel.custom_minimum_size = Vector2(hud_w, hud_h)
 		player_hud_panel.size = Vector2(hud_w, hud_h)
 		player_hud_panel.position = Vector2(16.0, maxf(16.0, vp_size.y - hud_h - 16.0))
@@ -1129,11 +1381,22 @@ func _update_player_stats_hud() -> void:
 		hud_stats_label.text = "⚔️ Atk: %d  🛡️ Def: %d  🧪 Pot: %d" % [s.attack, s.defense, s.potions]
 	if hud_key_badge:
 		if s.has_key:
-			hud_key_badge.text = "🔑 Castle Key: [ACQUIRED!]"
+			hud_key_badge.text = "Castle Key: [ACQUIRED!]"
 			hud_key_badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+			if hud_key_icon: hud_key_icon.modulate = Color(1.0, 0.85, 0.2, 1.0)
 		else:
-			hud_key_badge.text = "🔑 Castle Key: [Kunci Istana Terkunci]"
+			hud_key_badge.text = "Castle Key: [LOCKED]"
 			hud_key_badge.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+			if hud_key_icon: hud_key_icon.modulate = Color(0.4, 0.4, 0.4, 0.6)
+
+	if hud_gate_badge:
+		hud_gate_badge.text = "🏰 Gerbang: Syarat Lv. %d | Segel: %s" % [
+			GameState.gate_req_level,
+			csp_result.get("gate_seal", "Seal of Flame")
+		]
+
+	if hud_pause_btn:
+		hud_pause_btn.text = "▶ Resume [P]" if is_game_paused else "⏸ Pause [P]"
 
 # ---------------------------------------------------------------
 # CHEAT LEVEL-UP (INSTANT & AUTO)
@@ -1171,3 +1434,563 @@ func _on_battle_started(_state: BattleState = null) -> void:
 func _on_battle_ended(_winner: String = "", _final_state: BattleState = null) -> void:
 	# Handled cleanly via BattleHUD.battle_hud_closed signal
 	pass
+
+# ---------------------------------------------------------------
+# GATE SCOUTING MODAL (INTEL & CSP DEDUCTION CARD)
+# ---------------------------------------------------------------
+func _show_gate_scouting_modal() -> void:
+	if is_instance_valid(gate_scout_modal) or scout_cooldown > 0.0 or is_in_battle:
+		return
+	scout_cooldown = 2.5
+
+	gate_scout_modal = PanelContainer.new()
+	gate_scout_modal.name = "GateScoutModal"
+	gate_scout_modal.z_index = 25
+	$CanvasLayer.add_child(gate_scout_modal)
+
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var m_width: float = 460.0
+	var m_height: float = 275.0
+	gate_scout_modal.custom_minimum_size = Vector2(m_width, m_height)
+	gate_scout_modal.size = Vector2(m_width, m_height)
+	gate_scout_modal.position = (vp_size - Vector2(m_width, m_height)) / 2.0
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.03, 0.08, 0.96)
+	style.border_color = Color(1.0, 0.75, 0.2, 0.95)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(10)
+	gate_scout_modal.add_theme_stylebox_override("panel", style)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	gate_scout_modal.add_child(vb)
+
+	# Header with warning sign icon
+	var hdr := HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 8)
+	vb.add_child(hdr)
+
+	var sign_icon := TextureRect.new()
+	var s_tex = load("res://assets/sprites/map/obstacles/gate_warning_sign.png")
+	if s_tex:
+		sign_icon.texture = s_tex
+		sign_icon.custom_minimum_size = Vector2(26, 26)
+		sign_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sign_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hdr.add_child(sign_icon)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "PAPAN PERINGATAN GERBANG: INTEL & DEDUKSI CSP"
+	title_lbl.add_theme_font_size_override("font_size", 11)
+	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr.add_child(title_lbl)
+
+	var btn_close := Button.new()
+	btn_close.text = "X"
+	btn_close.custom_minimum_size = Vector2(24, 22)
+	btn_close.pressed.connect(func():
+		if is_instance_valid(gate_scout_modal):
+			gate_scout_modal.queue_free()
+			gate_scout_modal = null
+	)
+	hdr.add_child(btn_close)
+
+	var sep := HSeparator.new()
+	vb.add_child(sep)
+
+	# Visual Cards Row (Penjaga | Segel | Bos)
+	var cards_row := HBoxContainer.new()
+	cards_row.add_theme_constant_override("separation", 8)
+	cards_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_child(cards_row)
+
+	var g_type: String = str(csp_result.get("guard_type", "Infernal Knight"))
+	var g_strat: String = str(csp_result.get("guard_strategy", "Aggressive"))
+	var g_elem: String = str(csp_result.get("guard_element", "Fire"))
+	var seal_name: String = str(csp_result.get("gate_seal", "Seal of Flame"))
+	var seal_eff: String = str(csp_result.get("gate_seal_effect", "Efek Medan Aktif"))
+	var b_wep: String = str(csp_result.get("boss_weapon", "Flame Scythe"))
+	var b_strat: String = str(csp_result.get("boss_strategy", "Tactical"))
+	var b_eff: String = str(csp_result.get("boss_weapon_effect", "Efek Senjata"))
+
+	# Card 1: Penjaga
+	var c1 := _make_scout_card("PENJAGA GERBANG", g_type, "[%s | %s]" % [g_elem, g_strat], _get_scout_guard_portrait(g_type, seal_name), Color(0.9, 0.45, 0.2))
+	cards_row.add_child(c1)
+
+	# Card 2: Segel Gerbang
+	var c2 := _make_scout_card("SEGEL GERBANG", seal_name, seal_eff, _get_scout_seal_texture(seal_name), Color(0.7, 0.35, 1.0))
+	cards_row.add_child(c2)
+
+	# Card 3: Resonansi Bos
+	var c3 := _make_scout_card("SENJATA BOS", b_wep, "[%s | %s]" % [b_strat, b_eff], _get_scout_boss_weapon_texture(b_wep), Color(1.0, 0.3, 0.4))
+	cards_row.add_child(c3)
+
+	# Deductive Narrative Box
+	var desc_lbl := RichTextLabel.new()
+	desc_lbl.bbcode_enabled = true
+	desc_lbl.fit_content = true
+	desc_lbl.scroll_active = false
+	desc_lbl.add_theme_font_size_override("normal_font_size", 9)
+	desc_lbl.text = "[color=#00f5d4][b]HASIL DEDUKSI CONSTRAINT SATISFACTION (AC-3):[/b][/color]\n"
+	desc_lbl.text += "• [color=yellow]Afinitas Elemen (C1-C2):[/color] Penjaga [b]%s[/b] terikat dengan [b]%s[/b], mewajibkan doktrin tempur [b]%s[/b].\n" % [g_type, seal_name, g_strat]
+	desc_lbl.text += "• [color=yellow]Resonansi Tahta (C3-C5):[/color] Segel memproyeksikan Bos Neraka bersenjatakan [b]%s[/b] dengan doktrin [b]%s[/b].\n" % [b_wep, b_strat]
+	var req_met: bool = GameState.level >= GameState.gate_req_level
+	var req_color: String = "lime" if req_met else "red"
+	desc_lbl.text += "• [color=yellow]Syarat Gerbang (C6):[/color] Minimal Level [color=%s][b]%d[/b][/color] (Level kamu saat ini: [color=%s][b]%d[/b][/color])" % [req_color, GameState.gate_req_level, req_color, GameState.level]
+	vb.add_child(desc_lbl)
+
+	# Bottom Action Button
+	var btn_ok := Button.new()
+	btn_ok.text = "Siap Tempur (Tutup Intel / ESC / Spasi)"
+	btn_ok.add_theme_font_size_override("font_size", 10)
+	btn_ok.custom_minimum_size = Vector2(0, 24)
+	btn_ok.pressed.connect(func():
+		if is_instance_valid(gate_scout_modal):
+			gate_scout_modal.queue_free()
+			gate_scout_modal = null
+	)
+	vb.add_child(btn_ok)
+
+func _make_scout_card(title_t: String, name_t: String, sub_t: String, icon_tex: Texture2D, border_c: Color) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.custom_minimum_size = Vector2(136, 68)
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.06, 0.05, 0.11, 0.9)
+	st.border_color = border_c
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(6)
+	st.set_content_margin_all(4)
+	p.add_theme_stylebox_override("panel", st)
+
+	var vb := VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 2)
+	p.add_child(vb)
+
+	var tl := Label.new()
+	tl.text = title_t
+	tl.add_theme_font_size_override("font_size", 7)
+	tl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+	tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(tl)
+
+	if icon_tex:
+		var tr := TextureRect.new()
+		tr.texture = icon_tex
+		tr.custom_minimum_size = Vector2(26, 26)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		vb.add_child(tr)
+
+	var nl := Label.new()
+	nl.text = name_t
+	nl.add_theme_font_size_override("font_size", 8)
+	nl.add_theme_color_override("font_color", border_c)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vb.add_child(nl)
+
+	var sl := Label.new()
+	sl.text = sub_t
+	sl.add_theme_font_size_override("font_size", 7)
+	sl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vb.add_child(sl)
+
+	return p
+
+func _get_scout_guard_portrait(g_name: String, seal_name: String) -> Texture2D:
+	const GRID_PATH := "res://assets/sprites/characters/guard/avatar_grid_9guards.png"
+	if ResourceLoader.exists(GRID_PATH):
+		var grid_tex = load(GRID_PATH) as Texture2D
+		if grid_tex:
+			var row := 0
+			var gl := g_name.to_lower()
+			if "shaman" in gl: row = 1
+			elif "gargoyle" in gl: row = 2
+			var col := 0
+			var sl := seal_name.to_lower()
+			if "shadow" in sl or "void" in sl: col = 1
+			elif "blood" in sl: col = 2
+			var atlas := AtlasTexture.new()
+			atlas.atlas = grid_tex
+			var cell_w := grid_tex.get_width() / 3.0
+			var cell_h := grid_tex.get_height() / 3.0
+			atlas.region = Rect2(col * cell_w, row * cell_h, cell_w, cell_h)
+			return atlas
+	return null
+
+func _get_scout_seal_texture(seal_name: String) -> Texture2D:
+	const PATH := "res://assets/sprites/map/obstacles/seals_gate_sheet.png"
+	if not ResourceLoader.exists(PATH): return null
+	var sheet: Texture2D = load(PATH) as Texture2D
+	if not sheet: return null
+	var col := 0
+	var s_lower := seal_name.to_lower()
+	if "shadow" in s_lower or "void" in s_lower: col = 1
+	elif "blood" in s_lower: col = 2
+	var atlas := AtlasTexture.new()
+	atlas.atlas = sheet
+	var w := sheet.get_width() / 3.0
+	atlas.region = Rect2(col * w, 0, w, sheet.get_height())
+	return atlas
+
+func _get_scout_boss_weapon_texture(weapon_name: String) -> Texture2D:
+	const PATH := "res://assets/sprites/characters/demon/weapons_boss_sheet.png"
+	if not ResourceLoader.exists(PATH): return null
+	var sheet: Texture2D = load(PATH) as Texture2D
+	if not sheet: return null
+	var col := 0
+	var w_lower := weapon_name.to_lower()
+	if "cursed" in w_lower or "shadow" in w_lower: col = 1
+	elif "trident" in w_lower or "blood" in w_lower: col = 2
+	var atlas := AtlasTexture.new()
+	atlas.atlas = sheet
+	var w := sheet.get_width() / 3.0
+	atlas.region = Rect2(col * w, 0, w, sheet.get_height())
+	return atlas
+
+# ---------------------------------------------------------------
+# ROAMING PAUSE & AI CONCEPT PRESENTATION MODAL
+# ---------------------------------------------------------------
+func _toggle_pause_game() -> void:
+	if is_in_battle or is_game_over:
+		return
+	if is_game_paused:
+		_resume_game()
+	else:
+		_pause_game()
+
+func _pause_game() -> void:
+	if is_game_paused or is_in_battle or is_game_over:
+		return
+	is_game_paused = true
+	get_tree().paused = true
+
+	# Explicitly freeze movement of entities
+	if player: player.is_active = false
+	if demon: demon.is_active = false
+	for m in spawned_minions:
+		if is_instance_valid(m):
+			m.is_active = false
+
+	if is_instance_valid(gate_scout_modal):
+		gate_scout_modal.queue_free()
+		gate_scout_modal = null
+
+	_build_pause_modal()
+	_update_player_stats_hud()
+
+func _resume_game() -> void:
+	if not is_game_paused:
+		return
+	is_game_paused = false
+	get_tree().paused = false
+
+	# Restore entity activity
+	if player and not is_in_battle and not is_game_over:
+		player.is_active = true
+	if demon and not is_in_battle and not GameState.boss_defeated:
+		demon.is_active = true
+	for m in spawned_minions:
+		if is_instance_valid(m) and not m.is_defeated:
+			m.is_active = true
+
+	if is_instance_valid(pause_modal):
+		pause_modal.queue_free()
+		pause_modal = null
+
+	_update_player_stats_hud()
+
+func _build_pause_modal() -> void:
+	if is_instance_valid(pause_modal):
+		pause_modal.queue_free()
+
+	pause_modal = Control.new()
+	pause_modal.name = "PauseModalRoot"
+	pause_modal.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_modal.process_mode = Node.PROCESS_MODE_ALWAYS
+	$CanvasLayer.add_child(pause_modal)
+
+	# 1. Dark Backdrop
+	var backdrop := ColorRect.new()
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.color = Color(0.02, 0.02, 0.04, 0.88)
+	pause_modal.add_child(backdrop)
+
+	var bg_tex := TextureRect.new()
+	bg_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var bg_img = load("res://assets/sprites/ui/panel_loading_bg.png")
+	if bg_img:
+		bg_tex.texture = bg_img
+		bg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg_tex.modulate = Color(1.0, 1.0, 1.0, 0.22)
+	pause_modal.add_child(bg_tex)
+
+	# 2. Main Centered Card
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_modal.add_child(center)
+
+	var panel := PanelContainer.new()
+	var card_w := 780.0
+	var card_h := 500.0
+	panel.custom_minimum_size = Vector2(card_w, card_h)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.03, 0.09, 0.98)
+	style.border_color = Color(1.0, 0.65, 0.15, 0.95)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(10)
+	style.set_content_margin_all(14)
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(vbox)
+
+	# --- TOP HEADER ---
+	var hdr := HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 10)
+	vbox.add_child(hdr)
+
+	var chip_icon := TextureRect.new()
+	var c_tex = load("res://assets/sprites/ui/skills/icon_algorithm_chip.png")
+	if c_tex:
+		chip_icon.texture = c_tex
+		chip_icon.custom_minimum_size = Vector2(36, 36)
+		chip_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		chip_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hdr.add_child(chip_icon)
+
+	var title_vbox := VBoxContainer.new()
+	title_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_vbox.add_theme_constant_override("separation", 2)
+	hdr.add_child(title_vbox)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "GAME PAUSED  |  BRIEFING ARSITEKTUR & KONSEP AI (TUBES TAHAP 3)"
+	title_lbl.add_theme_font_size_override("font_size", 13)
+	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.80, 0.2))
+	title_vbox.add_child(title_lbl)
+
+	var subtitle_lbl := Label.new()
+	subtitle_lbl.text = "Infernal Affairs: Integrasi Pathfinding, Adversarial Minimax, CSP, & Local Search"
+	subtitle_lbl.add_theme_font_size_override("font_size", 10)
+	subtitle_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.85))
+	title_vbox.add_child(subtitle_lbl)
+
+	var btn_resume_top := Button.new()
+	btn_resume_top.text = " ▶ Lanjutkan [P / ESC] "
+	btn_resume_top.add_theme_font_size_override("font_size", 11)
+	btn_resume_top.custom_minimum_size = Vector2(160, 32)
+	var r_style := StyleBoxFlat.new()
+	r_style.bg_color = Color(0.15, 0.65, 0.35, 0.95)
+	r_style.set_corner_radius_all(6)
+	btn_resume_top.add_theme_stylebox_override("normal", r_style)
+	btn_resume_top.pressed.connect(_resume_game)
+	hdr.add_child(btn_resume_top)
+
+	# --- LIVE WORLD STATUS STRIP ---
+	var status_strip := PanelContainer.new()
+	var ss_style := StyleBoxFlat.new()
+	ss_style.bg_color = Color(0.08, 0.06, 0.14, 0.9)
+	ss_style.border_color = Color(0.3, 0.2, 0.5, 0.8)
+	ss_style.set_border_width_all(1)
+	ss_style.set_corner_radius_all(6)
+	ss_style.set_content_margin_all(6)
+	status_strip.add_theme_stylebox_override("panel", ss_style)
+	vbox.add_child(status_strip)
+
+	var ss_hbox := HBoxContainer.new()
+	ss_hbox.add_theme_constant_override("separation", 16)
+	status_strip.add_child(ss_hbox)
+
+	var p_sum: Dictionary = GameState.get_status_summary()
+	var zone_name: String = "Wilderness (Hutan Minion)"
+	if player:
+		if player.grid_pos.y <= GridManager.CASTLE_Y_MAX:
+			zone_name = "Throne Room (Ruang Tahta Bos)"
+		elif player.grid_pos.y <= GridManager.COURTYARD_Y + 1:
+			zone_name = "Gate Courtyard (Depan Gerbang)"
+
+	var s_player_info := Label.new()
+	s_player_info.text = "👤 Player: Lv. %d | HP: %d/%d | Exp: %d/%d | Pot: %d" % [
+		p_sum.level, p_sum.hp, p_sum.max_hp, p_sum.exp, p_sum.exp_needed, p_sum.potions
+	]
+	s_player_info.add_theme_font_size_override("font_size", 9)
+	s_player_info.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
+	ss_hbox.add_child(s_player_info)
+
+	var s_gate_info := Label.new()
+	s_gate_info.text = "🏰 Segel: [%s] | Syarat: Lv. %d" % [
+		csp_result.get("gate_seal", "Seal of Flame"), GameState.gate_req_level
+	]
+	s_gate_info.add_theme_font_size_override("font_size", 9)
+	s_gate_info.add_theme_color_override("font_color", Color(1.0, 0.75, 0.2))
+	ss_hbox.add_child(s_gate_info)
+
+	var s_zone_info := Label.new()
+	s_zone_info.text = "📍 Zona: %s" % zone_name
+	s_zone_info.add_theme_font_size_override("font_size", 9)
+	s_zone_info.add_theme_color_override("font_color", Color(0.85, 0.5, 1.0))
+	s_zone_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s_zone_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ss_hbox.add_child(s_zone_info)
+
+	# --- 3 AI ARCHITECTURE CARDS (TAHAP 1, 2, 3) ---
+	var cards_row := HBoxContainer.new()
+	cards_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cards_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(cards_row)
+
+	# Card 1: Tahap 1 Pathfinding
+	var c1 := _make_concept_card(
+		"TAHAP 1: PATHFINDING",
+		"A* & UCS (Dijkstra)",
+		Color(0.0, 0.95, 0.85),
+		"[color=#00f5d4][b]• Algoritma Navigasi:[/b][/color] Menggunakan A* (Heuristik Manhattan) & UCS.\n" +
+		"[color=#00f5d4][b]• NPC Patrol & Chase:[/b][/color] Minion berpatroli acak di Wilderness. Bos mengejar saat terdeteksi.\n" +
+		"[color=#00f5d4][b]• Visualizer Real-Time:[/b][/color] Garis ungu (titik lintasan) & area kuning (simpul terbuka/frontier).\n" +
+		"[color=#00f5d4][b]• Dynamic Switch:[/b][/color] Tekan [TAB] atau [1/2] untuk beralih A* / UCS kapan saja."
+	)
+	cards_row.add_child(c1)
+
+	# Card 2: Tahap 2 Adversarial Search
+	var c2 := _make_concept_card(
+		"TAHAP 2: ADVERSARIAL",
+		"Minimax + Alpha-Beta",
+		Color(0.85, 0.45, 1.0),
+		"[color=#d884ff][b]• Turn-Based Duel:[/b][/color] Pertarungan taktis (Attack, Heavy, Defend, Potion).\n" +
+		"[color=#d884ff][b]• Alpha-Beta Pruning:[/b][/color] Memangkas cabang pohon yang tidak optimal secara eksponensial.\n" +
+		"[color=#d884ff][b]• Heuristic Eval Func:[/b][/color] HP Difference, Aggressive, Defensive, & Weighted.\n" +
+		"[color=#d884ff][b]• Live Debug Sidebar:[/b][/color] Tekan [D] saat duel untuk memantau pohon & performa pencarian."
+	)
+	cards_row.add_child(c2)
+
+	# Card 3: Tahap 3 CSP & Local Search
+	var c3 := _make_concept_card(
+		"TAHAP 3: CSP & BALANCING",
+		"AC-3 & Simulated Annealing",
+		Color(1.0, 0.65, 0.15),
+		"[color=#ffbe0b][b]• Formulasi CSP (AC-3):[/b][/color] Graf 7-variabel mengatur Penjaga, Segel, Senjata Bos, & Doktrin.\n" +
+		"[color=#ffbe0b][b]• Efek Pasif Aktif:[/b][/color] Burn DoT, Lifesteal, dan Armor Pierce terikat pada senjata & segel.\n" +
+		"[color=#ffbe0b][b]• Local Search Balancer:[/b][/color] Optimasi stat musuh pra-duel via Simulated Annealing (winrate 55%).\n" +
+		"[color=#ffbe0b][b]• Intel Scouting:[/b][/color] Periksa papan gerbang untuk deduksi taktis sebelum menantang Penjaga."
+	)
+	cards_row.add_child(c3)
+
+	# --- PRESENTATION SHORTCUTS BAR ---
+	var sc_panel := PanelContainer.new()
+	var sc_style := StyleBoxFlat.new()
+	sc_style.bg_color = Color(0.02, 0.02, 0.05, 0.85)
+	sc_style.border_color = Color(0.4, 0.4, 0.5, 0.6)
+	sc_style.set_border_width_all(1)
+	sc_style.set_corner_radius_all(5)
+	sc_style.set_content_margin_all(5)
+	sc_panel.add_theme_stylebox_override("panel", sc_style)
+	vbox.add_child(sc_panel)
+
+	var sc_lbl := Label.new()
+	sc_lbl.text = "Shortcut Presenter:  [P / ESC] Pause/Resume  |  [TAB] A*/UCS  |  [F3] Debug HUD  |  [L] Instant Level Up  |  [K] Auto-Level  |  [R] Reset"
+	sc_lbl.add_theme_font_size_override("font_size", 9)
+	sc_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+	sc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sc_panel.add_child(sc_lbl)
+
+	# --- BOTTOM ACTION BUTTONS ---
+	var bot_row := HBoxContainer.new()
+	bot_row.add_theme_constant_override("separation", 10)
+	vbox.add_child(bot_row)
+
+	var btn_intel := Button.new()
+	btn_intel.text = " 📜 Buka Intel Gerbang (CSP) "
+	btn_intel.add_theme_font_size_override("font_size", 10)
+	btn_intel.custom_minimum_size = Vector2(180, 30)
+	btn_intel.pressed.connect(func():
+		_resume_game()
+		_show_gate_scouting_modal()
+	)
+	bot_row.add_child(btn_intel)
+
+	var btn_cheat := Button.new()
+	btn_cheat.text = " ⚡ +1 Level Up (L) "
+	btn_cheat.add_theme_font_size_override("font_size", 10)
+	btn_cheat.custom_minimum_size = Vector2(130, 30)
+	btn_cheat.pressed.connect(func():
+		_cheat_level_up()
+		_build_pause_modal() # Refresh modal
+	)
+	bot_row.add_child(btn_cheat)
+
+	var spc := Control.new()
+	spc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bot_row.add_child(spc)
+
+	var btn_restart := Button.new()
+	btn_restart.text = " 🔄 Restart Game (R) "
+	btn_restart.add_theme_font_size_override("font_size", 10)
+	btn_restart.custom_minimum_size = Vector2(140, 30)
+	btn_restart.pressed.connect(func():
+		_resume_game()
+		start_new_game()
+	)
+	bot_row.add_child(btn_restart)
+
+	var btn_resume_bot := Button.new()
+	btn_resume_bot.text = " ▶ Lanjutkan Bermain "
+	btn_resume_bot.add_theme_font_size_override("font_size", 11)
+	btn_resume_bot.custom_minimum_size = Vector2(160, 30)
+	var res_style := StyleBoxFlat.new()
+	res_style.bg_color = Color(0.9, 0.45, 0.1, 0.95)
+	res_style.set_corner_radius_all(6)
+	btn_resume_bot.add_theme_stylebox_override("normal", res_style)
+	btn_resume_bot.pressed.connect(_resume_game)
+	bot_row.add_child(btn_resume_bot)
+
+func _make_concept_card(title_t: String, sub_t: String, col: Color, bb_desc: String) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.04, 0.03, 0.08, 0.92)
+	st.border_color = col
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(6)
+	st.set_content_margin_all(8)
+	p.add_theme_stylebox_override("panel", st)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 4)
+	p.add_child(vb)
+
+	var tl := Label.new()
+	tl.text = title_t
+	tl.add_theme_font_size_override("font_size", 10)
+	tl.add_theme_color_override("font_color", col)
+	vb.add_child(tl)
+
+	var sl := Label.new()
+	sl.text = sub_t
+	sl.add_theme_font_size_override("font_size", 8)
+	sl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	vb.add_child(sl)
+
+	var sep := HSeparator.new()
+	vb.add_child(sep)
+
+	var rtl := RichTextLabel.new()
+	rtl.bbcode_enabled = true
+	rtl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rtl.fit_content = false
+	rtl.scroll_active = false
+	rtl.add_theme_font_size_override("normal_font_size", 8)
+	rtl.text = bb_desc
+	vb.add_child(rtl)
+
+	return p

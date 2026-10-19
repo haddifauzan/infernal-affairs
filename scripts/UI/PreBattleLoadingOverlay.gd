@@ -103,8 +103,18 @@ func _build_ui() -> void:
 	# Full-screen dark translucent backdrop
 	var backdrop := ColorRect.new()
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	backdrop.color = Color(0.02, 0.02, 0.04, 0.82)
+	backdrop.color = Color(0.02, 0.02, 0.04, 0.85)
 	add_child(backdrop)
+
+	var bg_tex := TextureRect.new()
+	bg_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var bg_img = load("res://assets/sprites/ui/panel_loading_bg.png")
+	if bg_img:
+		bg_tex.texture = bg_img
+		bg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg_tex.modulate = Color(1.0, 1.0, 1.0, 0.26)
+		add_child(bg_tex)
 
 	# Root MarginContainer to pad nicely away from screen boundaries
 	_root = MarginContainer.new()
@@ -211,21 +221,6 @@ func _build_ui() -> void:
 	_enemy_subtitle_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_vbox.add_child(_enemy_subtitle_label)
 
-	if enemy_strategy.length() > 0 or gate_seal_effect.length() > 0 or boss_weapon_effect.length() > 0:
-		var intel_lbl := Label.new()
-		var lines: Array[String] = []
-		if enemy_strategy.length() > 0:
-			lines.append(">> DOKTRIN AI (CSP): %s" % enemy_strategy)
-		if enemy_type == "guard" and gate_seal_effect.length() > 0:
-			lines.append(">> EFEK SEGEL: %s" % gate_seal_effect)
-		elif enemy_type == "boss" and boss_weapon_effect.length() > 0:
-			lines.append(">> EFEK SENJATA: %s" % boss_weapon_effect)
-		intel_lbl.text = "   |   ".join(lines)
-		intel_lbl.add_theme_font_size_override("font_size", 10)
-		intel_lbl.add_theme_color_override("font_color", Color(0.2, 1.0, 0.7))
-		intel_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		title_vbox.add_child(intel_lbl)
-
 	# Algo Swap Button (compact!)
 	_algo_btn = Button.new()
 	_algo_btn.text = "Algo: Simulated Annealing (Swap)"
@@ -236,6 +231,10 @@ func _build_ui() -> void:
 
 	var sep1 := HSeparator.new()
 	main_vbox.add_child(sep1)
+
+	# --- 1b. TACTICAL COMBAT INTEL & WARNING BRIEFING CARD ---
+	var briefing_card := _build_tactical_warning_card()
+	main_vbox.add_child(briefing_card)
 
 	# --- 2. TOP METRICS CARDS (Player vs Target vs Enemy) ---
 	var metrics_row := HBoxContainer.new()
@@ -359,7 +358,7 @@ func _build_ui() -> void:
 
 	# Right Column: Initial vs Optimized Stat Comparison Card
 	var comp_panel := PanelContainer.new()
-	comp_panel.custom_minimum_size = Vector2(275, 0)
+	comp_panel.custom_minimum_size = Vector2(335, 0)
 	var comp_style := StyleBoxFlat.new()
 	comp_style.bg_color = Color(0.06, 0.04, 0.10, 0.9)
 	comp_style.border_color = Color(0.7, 0.3, 0.8, 0.8)
@@ -402,11 +401,13 @@ func _build_ui() -> void:
 	_lbl_depth_comp = _add_stat_row(_stat_grid, "Minimax:")
 
 	var note_lbl := Label.new()
-	note_lbl.text = "[OK] Win-rate ~55% | 5-7 turn
-[OK] Dinamis sesuai level & HP"
+	note_lbl.text = "[OK] Win-rate ~55% | 5-7 turn  |  Dinamis sesuai level"
 	note_lbl.add_theme_font_size_override("font_size", 9)
 	note_lbl.add_theme_color_override("font_color", Color(0.3, 0.9, 0.6))
 	comp_vbox.add_child(note_lbl)
+
+	# Jaringan Kendala CSP (AC-3 Solved)
+	_build_csp_network_card(comp_vbox)
 
 	# --- 4. BOTTOM ACTION CONTROLS ---
 	var bot_box := HBoxContainer.new()
@@ -425,16 +426,27 @@ func _build_ui() -> void:
 	bot_box.add_child(spc)
 
 	_proceed_btn = Button.new()
-	_proceed_btn.text = " Mulai Duel (Masuk Arena) "
+	_proceed_btn.text = " ⚔ Lanjut ke Battle [X / Enter] "
 	_proceed_btn.add_theme_font_size_override("font_size", 12)
-	_proceed_btn.custom_minimum_size = Vector2(230, 34)
+	_proceed_btn.custom_minimum_size = Vector2(240, 34)
 	var btn_style := StyleBoxFlat.new()
-	btn_style.bg_color = Color(0.9, 0.35, 0.1, 0.9)
+	btn_style.bg_color = Color(0.1, 0.6, 0.4, 0.95)
+	btn_style.border_color = Color(0.2, 1.0, 0.7, 0.95)
+	btn_style.set_border_width_all(1)
 	btn_style.set_corner_radius_all(6)
 	btn_style.set_content_margin_all(6)
 	_proceed_btn.add_theme_stylebox_override("normal", btn_style)
 	_proceed_btn.pressed.connect(_on_proceed_pressed)
 	bot_box.add_child(_proceed_btn)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	match event.keycode:
+		KEY_X, KEY_ENTER, KEY_SPACE:
+			_on_proceed_pressed()
+		KEY_ESCAPE:
+			_on_cancel_pressed()
 
 func _make_info_card(title_text: String, border_col: Color) -> PanelContainer:
 	var p := PanelContainer.new()
@@ -696,4 +708,257 @@ func _get_weapon_icon(enemy_t: String, weapon_name: String) -> Texture2D:
 	var h := float(sheet.get_height())
 	atlas.region = Rect2(col * w, 0, w, h)
 	return atlas
+
+func _build_csp_network_card(parent: Control) -> void:
+	var csp_panel := PanelContainer.new()
+	var cs_style := StyleBoxFlat.new()
+	cs_style.bg_color = Color(0.03, 0.02, 0.07, 0.95)
+	cs_style.border_color = Color(0.2, 0.85, 0.75, 0.8)
+	cs_style.set_border_width_all(1)
+	cs_style.set_corner_radius_all(6)
+	cs_style.set_content_margin_all(5)
+	csp_panel.add_theme_stylebox_override("panel", cs_style)
+	parent.add_child(csp_panel)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 3)
+	csp_panel.add_child(vb)
+
+	# Title with status badge
+	var hdr := HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 6)
+	vb.add_child(hdr)
+
+	var hdr_lbl := Label.new()
+	hdr_lbl.text = "JARINGAN KENDALA CSP (AC-3)"
+	hdr_lbl.add_theme_font_size_override("font_size", 9)
+	hdr_lbl.add_theme_color_override("font_color", Color(0.2, 1.0, 0.8))
+	hdr_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr.add_child(hdr_lbl)
+
+	var status_tag := Label.new()
+	status_tag.text = "[Lolos AC-3 ✓]"
+	status_tag.add_theme_font_size_override("font_size", 8)
+	status_tag.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
+	hdr.add_child(status_tag)
+
+	# Visual Nodes Row: [Guard Icon] -> [Seal Icon] -> [Boss Weapon Icon]
+	var nodes_row := HBoxContainer.new()
+	nodes_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	nodes_row.add_theme_constant_override("separation", 4)
+	vb.add_child(nodes_row)
+
+	var g_name: String = str(csp_context.get("guard_type", "Infernal Knight"))
+	var g_strat: String = str(csp_context.get("guard_strategy", enemy_strategy))
+	var s_name: String = gate_seal if gate_seal.length() > 0 else str(csp_context.get("gate_seal", "Seal of Flame"))
+	var bw_name: String = enemy_weapon if enemy_type == "boss" else str(csp_context.get("boss_weapon", "Flame Scythe"))
+	var b_strat: String = str(csp_context.get("boss_strategy", "Tactical"))
+
+	var g_card := _make_csp_node_box("Penjaga", g_name, g_strat, _get_guard_avatar_node_icon(g_name, s_name), Color(0.9, 0.45, 0.2))
+	nodes_row.add_child(g_card)
+
+	var arr1 := Label.new()
+	arr1.text = "C1\n→"
+	arr1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	arr1.add_theme_font_size_override("font_size", 7)
+	arr1.add_theme_color_override("font_color", Color(0.65, 0.65, 0.8))
+	nodes_row.add_child(arr1)
+
+	var s_card := _make_csp_node_box("Segel", s_name, "Medan", _get_seal_icon(s_name), Color(0.7, 0.35, 1.0))
+	nodes_row.add_child(s_card)
+
+	var arr2 := Label.new()
+	arr2.text = "C3\n→"
+	arr2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	arr2.add_theme_font_size_override("font_size", 7)
+	arr2.add_theme_color_override("font_color", Color(0.65, 0.65, 0.8))
+	nodes_row.add_child(arr2)
+
+	var bw_card := _make_csp_node_box("Senjata Bos", bw_name, b_strat, _get_weapon_icon("boss", bw_name), Color(1.0, 0.3, 0.4))
+	nodes_row.add_child(bw_card)
+
+	# Constraint Status Verification Rows
+	var c_list := VBoxContainer.new()
+	c_list.add_theme_constant_override("separation", 1)
+	vb.add_child(c_list)
+
+	_add_constraint_row(c_list, "C1 (Afinitas):", "%s ↔ %s" % [g_name, s_name], Color(0.2, 0.95, 0.8))
+	_add_constraint_row(c_list, "C2 (Doktrin):", "%s → %s" % [s_name, g_strat], Color(1.0, 0.8, 0.3))
+	_add_constraint_row(c_list, "C3 (Resonansi):", "%s ↔ %s" % [s_name, bw_name], Color(0.9, 0.4, 0.9))
+	_add_constraint_row(c_list, "C4 (Diversitas):", "%s → %s" % [bw_name, b_strat], Color(0.4, 0.8, 1.0))
+	_add_constraint_row(c_list, "C5 (Anti-Monopoli):", "%s ≠ %s (Lolos)" % [b_strat, g_strat], Color(0.3, 1.0, 0.5))
+
+func _make_csp_node_box(_title_t: String, name_t: String, sub_t: String, icon_tex: Texture2D, border_c: Color) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.custom_minimum_size = Vector2(80, 52)
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.06, 0.05, 0.11, 0.9)
+	st.border_color = border_c
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(4)
+	st.set_content_margin_all(2)
+	p.add_theme_stylebox_override("panel", st)
+
+	var vb := VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 1)
+	p.add_child(vb)
+
+	if icon_tex:
+		var tr := TextureRect.new()
+		tr.texture = icon_tex
+		tr.custom_minimum_size = Vector2(22, 22)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		vb.add_child(tr)
+
+	var nl := Label.new()
+	nl.text = name_t
+	nl.add_theme_font_size_override("font_size", 7)
+	nl.add_theme_color_override("font_color", border_c)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vb.add_child(nl)
+
+	var sl := Label.new()
+	sl.text = "[%s]" % sub_t
+	sl.add_theme_font_size_override("font_size", 7)
+	sl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(sl)
+
+	return p
+
+func _add_constraint_row(parent: Control, tag: String, val: String, col: Color) -> void:
+	var r := HBoxContainer.new()
+	parent.add_child(r)
+	var t := Label.new()
+	t.text = tag
+	t.add_theme_font_size_override("font_size", 8)
+	t.add_theme_color_override("font_color", Color(0.65, 0.65, 0.7))
+	r.add_child(t)
+
+	var v := Label.new()
+	v.text = val
+	v.add_theme_font_size_override("font_size", 8)
+	v.add_theme_color_override("font_color", col)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	v.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	r.add_child(v)
+
+func _get_guard_avatar_node_icon(g_name: String, seal_name: String) -> Texture2D:
+	const GRID_PATH := "res://assets/sprites/characters/guard/avatar_grid_9guards.png"
+	if ResourceLoader.exists(GRID_PATH):
+		var grid_tex = load(GRID_PATH) as Texture2D
+		if grid_tex:
+			var row := 0
+			var gl := g_name.to_lower()
+			if "shaman" in gl: row = 1
+			elif "gargoyle" in gl: row = 2
+			var col := 0
+			var sl := seal_name.to_lower()
+			if "shadow" in sl or "void" in sl: col = 1
+			elif "blood" in sl: col = 2
+			var atlas := AtlasTexture.new()
+			atlas.atlas = grid_tex
+			var cell_w := grid_tex.get_width() / 3.0
+			var cell_h := grid_tex.get_height() / 3.0
+			atlas.region = Rect2(col * cell_w, row * cell_h, cell_w, cell_h)
+			return atlas
+	return null
+
+func _build_tactical_warning_card() -> PanelContainer:
+	var card := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.03, 0.12, 0.95)
+	style.border_color = Color(1.0, 0.55, 0.15, 0.9)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	style.content_margin_left   = 10
+	style.content_margin_right  = 10
+	style.content_margin_top    = 6
+	style.content_margin_bottom = 6
+	card.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 3)
+	card.add_child(vbox)
+
+	var h_row := HBoxContainer.new()
+	vbox.add_child(h_row)
+
+	var warn_title := Label.new()
+	warn_title.text = "⚠️ PERINGATAN COMBAT & REKOMENDASI TAKTIK (INTEL CSP)"
+	warn_title.add_theme_font_size_override("font_size", 11)
+	warn_title.add_theme_color_override("font_color", Color(1.0, 0.75, 0.2))
+	warn_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h_row.add_child(warn_title)
+
+	var badge := Label.new()
+	badge.text = "[ %s | %s ]" % [
+		enemy_strategy if enemy_strategy.length() > 0 else "Standard",
+		gate_seal if enemy_type == "guard" else enemy_weapon
+	]
+	badge.add_theme_font_size_override("font_size", 10)
+	badge.add_theme_color_override("font_color", Color(0.2, 1.0, 0.7))
+	h_row.add_child(badge)
+
+	# Info line 1: Identity & Passive
+	var info_lbl := Label.new()
+	var lines_info: Array[String] = []
+	if enemy_type == "guard":
+		lines_info.append("Penjaga: %s  |  Doktrin: %s  |  Beban Segel: %s" % [enemy_name, enemy_strategy, gate_seal])
+		if gate_seal_effect.length() > 0:
+			lines_info.append("Efek Pasif: %s" % gate_seal_effect)
+	elif enemy_type == "boss":
+		lines_info.append("Bos Neraka: %s  |  Doktrin: %s  |  Senjata: %s" % [enemy_name, enemy_strategy, enemy_weapon])
+		if boss_weapon_effect.length() > 0:
+			lines_info.append("Efek Pasif: %s" % boss_weapon_effect)
+	else:
+		lines_info.append("Minion Kastil: Tingkat dasar, uji coba kombo tempur.")
+	info_lbl.text = "   •   ".join(lines_info)
+	info_lbl.add_theme_font_size_override("font_size", 10)
+	info_lbl.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	info_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vbox.add_child(info_lbl)
+
+	# Info line 2: Tailored Counter-Tips for Player
+	var tips_lbl := Label.new()
+	tips_lbl.text = "💡 TIPS TAKTIS PEMAIN: %s" % _get_tactical_tips_for_player()
+	tips_lbl.add_theme_font_size_override("font_size", 10)
+	tips_lbl.add_theme_color_override("font_color", Color(0.2, 1.0, 0.8))
+	tips_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	vbox.add_child(tips_lbl)
+
+	return card
+
+func _get_tactical_tips_for_player() -> String:
+	var strat := enemy_strategy.to_lower()
+	var item := (gate_seal if enemy_type == "guard" else enemy_weapon).to_lower()
+
+	if enemy_type == "guard":
+		if "blood" in item:
+			return "Segel Darah (Flat -4 DMG Ward): Serangan biasa terpangkas parah! Wajib gunakan Heavy Attack untuk menembus pertahanan lawan."
+		elif "flame" in item:
+			return "Segel Api (Scorched Ground -3 HP/ronde): Stalling merugikanmu! Gunakan duel tempo tinggi dan minum Potion saat HP menipis."
+		elif "shadow" in item:
+			return "Segel Bayangan (Soul Drain 15%): Pasang Defend saat musuh bersiap menyerang, lalu balas dengan Heavy Attack telak."
+	else: # "boss"
+		if "trident" in item or "blood" in item:
+			return "Blood Trident (Armor Pierce Mutlak): Menembus 80-90% Defend! Jangan bertahan sia-sia; adu Heavy Attack dan jaga HP > 45% dengan Potion."
+		elif "scythe" in item or "flame" in item:
+			return "Flame Scythe (Burn DoT -5 HP x 2 turn): Tangkis pukulan beratnya dengan Defend dan segera pulihkan HP dengan Potion."
+		else:
+			return "Cursed Blade (Soul Drain 20%): Pasang Defend saat Bos menyerang agar regenerasinya minim, lalu balas dengan Heavy Attack."
+
+	if "aggressive" in strat:
+		return "Musuh Agresif mengincar Serangan Berat. Pasang [Defend] saat ia bersiap menyerang, lalu balas dengan Heavy Attack saat ia kelelahan!"
+	elif "defensive" in strat:
+		return "Musuh gemar menangkis & meminum potion. Jangan boros pukulan berat saat ia Defend; gunakan giliran ini untuk Potion atau kumpulkan momentum!"
+	elif "tactical" in strat:
+		return "AI menghitung 3-4 turn ke depan! Variasikan pola aksi dan konsumsi potion sebelum HP turun di bawah 40%."
+
+	return "Manfaatkan saat lawan tidak Defend untuk melancarkan serangan terbaikmu."
+
 

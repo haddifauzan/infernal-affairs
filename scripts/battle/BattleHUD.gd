@@ -9,6 +9,7 @@ class_name BattleHUD
 extends CanvasLayer
 
 signal battle_hud_closed(winner: String)
+signal restart_requested
 
 # -----------------------------------------------------------------------------
 # CONSTANTS & ASSETS
@@ -26,6 +27,7 @@ const TEX_AURA_DEMON      := "res://assets/sprites/ui/effects/aura_demon.png"
 const TEX_ICON_SWORD      := "res://assets/sprites/ui/skills/icon_sword.png"
 const TEX_ICON_SHIELD     := "res://assets/sprites/ui/skills/icon_shield.png"
 const TEX_ICON_POTION     := "res://assets/sprites/ui/skills/icon_potion.png"
+const TEX_ICON_HEAVY      := "res://assets/sprites/ui/skills/icon_heavy_attack.png"
 
 
 # -----------------------------------------------------------------------------
@@ -53,6 +55,8 @@ var _npc_doctrine_label: Label
 var _npc_avatar_rect: TextureRect
 var _npc_weapon_rect:  TextureRect
 var _btn_return:      Button
+var _btn_retreat:     Button
+var _btn_restart:     Button
 
 # Combat Stage Elements
 var _combat_stage_panel: PanelContainer
@@ -66,6 +70,7 @@ var _player_badge_lbl:   Label
 
 var _demon_node:         Control
 var _demon_sprite:       TextureRect
+var _demon_seal_fx:      TextureRect
 var _demon_aura:         TextureRect
 var _demon_shield_fx:    TextureRect
 var _demon_turn_badge:   PanelContainer
@@ -100,6 +105,14 @@ var _algo_btns:      Array[Button] = []
 var _eval_btns:      Array[Button] = []
 var _order_btns:     Array[Button] = []
 var _depth_btns:     Dictionary = {}  # int -> Button
+
+# CSP Triplet & Passive Modular Box
+var _box_csp:           PanelContainer
+var _lbl_csp_archetype: Label
+var _lbl_csp_seal:      Label
+var _lbl_csp_weapon:    Label
+var _lbl_csp_doctrine:  Label
+var _lbl_csp_passive:   Label
 
 # Debug Sidebar Modular Sub-Boxes
 var _debug_visible: bool = true
@@ -222,6 +235,40 @@ func _build_header_and_hp() -> void:
 	title.add_theme_color_override("font_color", Color(1.0, 0.45, 0.2))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_row.add_child(title)
+
+	_btn_retreat = Button.new()
+	_btn_retreat.text = "🏃 Mundur [ESC]"
+	_btn_retreat.add_theme_font_size_override("font_size", 10)
+	_btn_retreat.tooltip_text = "Mundur dari duel dengan pemulihan HP 50% untuk menyusun strategi ulang"
+	var ret_style := StyleBoxFlat.new()
+	ret_style.bg_color = Color(0.35, 0.12, 0.12, 0.9)
+	ret_style.border_color = Color(0.85, 0.3, 0.3, 0.9)
+	ret_style.set_border_width_all(1)
+	ret_style.set_corner_radius_all(4)
+	ret_style.content_margin_left = 6
+	ret_style.content_margin_right = 6
+	ret_style.content_margin_top = 3
+	ret_style.content_margin_bottom = 3
+	_btn_retreat.add_theme_stylebox_override("normal", ret_style)
+	_btn_retreat.pressed.connect(_retreat_from_battle)
+	top_row.add_child(_btn_retreat)
+
+	_btn_restart = Button.new()
+	_btn_restart.text = "🔄 Restart [R]"
+	_btn_restart.add_theme_font_size_override("font_size", 10)
+	_btn_restart.tooltip_text = "Mulai ulang permainan dari awal (regenerasi peta dan reset status)"
+	var rst_style := StyleBoxFlat.new()
+	rst_style.bg_color = Color(0.35, 0.22, 0.08, 0.9)
+	rst_style.border_color = Color(0.95, 0.6, 0.15, 0.9)
+	rst_style.set_border_width_all(1)
+	rst_style.set_corner_radius_all(4)
+	rst_style.content_margin_left = 6
+	rst_style.content_margin_right = 6
+	rst_style.content_margin_top = 3
+	rst_style.content_margin_bottom = 3
+	_btn_restart.add_theme_stylebox_override("normal", rst_style)
+	_btn_restart.pressed.connect(_request_restart)
+	top_row.add_child(_btn_restart)
 
 	_btn_toggle_exp = Button.new()
 	_btn_toggle_exp.text = "Benchmark Lab [P]"
@@ -422,6 +469,17 @@ func _build_combat_stage() -> void:
 	_demon_node.name = "DemonNode"
 	_combat_stage.add_child(_demon_node)
 
+	_demon_seal_fx = TextureRect.new()
+	_demon_seal_fx.name = "DemonSealFX"
+	_demon_seal_fx.custom_minimum_size = Vector2(170, 170)
+	_demon_seal_fx.position = Vector2(-85, -170)
+	_demon_seal_fx.pivot_offset = Vector2(85, 85)
+	_demon_seal_fx.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_demon_seal_fx.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_demon_seal_fx.modulate = Color(1.0, 1.0, 1.0, 0.4)
+	_demon_seal_fx.visible = false
+	_demon_node.add_child(_demon_seal_fx)
+
 	_demon_aura = _make_texture_rect(TEX_AURA_DEMON, Vector2(140, 45))
 	_demon_aura.position = Vector2(-70, -18)
 	_demon_aura.modulate = Color(1.0, 0.3, 0.1, 0.6)
@@ -496,7 +554,7 @@ func _build_controls() -> void:
 	vbox.add_child(btn_row)
 
 	_btn_attack = _make_action_button("[1] Attack\n[20 DMG]",        Color(0.85, 0.25, 0.1),  TEX_ICON_SWORD)
-	_btn_heavy  = _make_action_button("[2] Heavy\n[37 DMG, -10]",     Color(0.95, 0.15, 0.45), TEX_ICON_SWORD)
+	_btn_heavy  = _make_action_button("[2] Heavy\n[37 DMG, -10]",     Color(0.95, 0.15, 0.45), TEX_ICON_HEAVY)
 	_btn_defend = _make_action_button("[3] Defend\n[Block 50%]",      Color(0.1, 0.55, 0.95),  TEX_ICON_SHIELD)
 	_btn_potion = _make_action_button("[4] Potion\n[+30 HP]",         Color(0.1, 0.85, 0.35),  TEX_ICON_POTION)
 
@@ -568,6 +626,17 @@ func _build_debug_sidebar() -> void:
 	boxes_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	boxes_vbox.add_theme_constant_override("separation", 6)
 	scroll.add_child(boxes_vbox)
+
+	# -- KOTAK CSP: CSP Context & Active Passives --
+	var csp_data := _make_subbox(" CSP Logic & Environmental Passives", Color(0.85, 0.35, 0.15))
+	_box_csp = csp_data["panel"] as PanelContainer
+	var csp_vbox: VBoxContainer = csp_data["content"] as VBoxContainer
+	boxes_vbox.add_child(_box_csp)
+	_lbl_csp_archetype = _make_stat_row("Archetype:", "--", Color(0.3, 0.85, 1.0), csp_vbox)
+	_lbl_csp_seal      = _make_stat_row("Gate Seal:", "None", Color(1.0, 0.7, 0.2), csp_vbox)
+	_lbl_csp_weapon    = _make_stat_row("Boss Weapon:", "None", Color(0.9, 0.3, 0.4), csp_vbox)
+	_lbl_csp_doctrine  = _make_stat_row("AI Doctrine:", "Balanced", Color(0.85, 0.5, 1.0), csp_vbox)
+	_lbl_csp_passive   = _make_stat_row("Active Ward:", "Standard", Color(0.2, 0.95, 0.6), csp_vbox)
 
 	# -- KOTAK 1: AI Engine & Configuration --
 	var cfg_data := _make_subbox(" AI Engine & Search Config", Color(0.3, 0.2, 0.6))
@@ -798,6 +867,12 @@ func _process(delta: float) -> void:
 		var d_pulse: float = 0.5 + 0.25 * sin(_idle_time * 2.5 + 0.8)
 		_demon_aura.modulate.a = d_pulse
 
+	# 3b. Demon Seal FX Rotation & Pulse
+	if is_instance_valid(_demon_seal_fx) and _demon_seal_fx.visible:
+		_demon_seal_fx.rotation += delta * 0.35
+		var seal_pulse := 1.0 + sin(_idle_time * 2.2) * 0.08
+		_demon_seal_fx.scale = Vector2(seal_pulse, seal_pulse)
+
 	# 4. Turn Badge Arrow Bounce
 	if is_instance_valid(_player_turn_badge) and _player_turn_badge.visible:
 		var arrow_bob := sin(_idle_time * 5.0) * 4.0
@@ -874,7 +949,7 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			var tw := create_tween()
 			tw.tween_property(attacker_node, "position", dash_target, 0.16).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 			tw.tween_callback(func():
-				_trigger_hit_impact(defender_node, defender_sprite, dmg, was_blocked, false)
+				_trigger_hit_impact(defender_node, defender_sprite, dmg, was_blocked, false, result, attacker_node)
 				_smooth_refresh_hp(new_state)
 			)
 			tw.tween_property(attacker_node, "position", base_pos, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
@@ -895,7 +970,7 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			tw.tween_callback(func():
 				attacker_sprite.modulate = Color(1.0, 1.0, 1.0)
 				_shake_combat_stage(7.0, 0.25)
-				_trigger_hit_impact(defender_node, defender_sprite, dmg, was_blocked, true)
+				_trigger_hit_impact(defender_node, defender_sprite, dmg, was_blocked, true, result, attacker_node)
 				_smooth_refresh_hp(new_state)
 			)
 			tw.tween_property(attacker_node, "position", base_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
@@ -934,7 +1009,7 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 				_on_animation_finished(is_player, new_state)
 			)
 
-func _trigger_hit_impact(def_node: Control, def_sprite: TextureRect, dmg: int, was_blocked: bool, is_crit: bool) -> void:
+func _trigger_hit_impact(def_node: Control, def_sprite: TextureRect, dmg: int, was_blocked: bool, is_crit: bool, result: Dictionary = {}, atk_node: Control = null) -> void:
 	if not is_instance_valid(def_node) or not is_instance_valid(def_sprite):
 		return
 
@@ -1005,6 +1080,24 @@ func _trigger_hit_impact(def_node: Control, def_sprite: TextureRect, dmg: int, w
 		_spawn_floating_text(" -%d CRITICAL!" % dmg, spawn_pos, Color(1.0, 0.25, 0.15), true)
 	else:
 		_spawn_floating_text("-%d HP" % dmg, spawn_pos, Color(1.0, 0.85, 0.2), false)
+
+	# 6. Environmental & CSP Passive Floating Callouts
+	if result.get("armor_pierced", false):
+		_spawn_floating_text("⚡ ARMOR PIERCE!", spawn_pos + Vector2(0, -32.0), Color(1.0, 0.25, 0.25), true)
+	elif result.get("seal_block", false):
+		_spawn_floating_text("🛡️ SEAL WARD -4 DMG", spawn_pos + Vector2(0, -32.0), Color(0.3, 0.8, 1.0), false)
+
+	if result.get("lifesteal", false) and is_instance_valid(atk_node):
+		var heal_val: int = result.get("heal_amount", 0)
+		_spawn_floating_text("🩸 SOUL DRAIN +%d HP" % heal_val, atk_node.position + Vector2(0, -110.0), Color(0.85, 0.3, 1.0), false)
+
+	if result.get("burn_applied", false):
+		_spawn_floating_text("🔥 INFERNAL BURN TERKENA!", spawn_pos + Vector2(0, -56.0), Color(1.0, 0.45, 0.15), true)
+
+	if result.get("burn_tick", false):
+		_spawn_floating_text("🔥 BURN DAMAGE -5 HP", _player_node.position + Vector2(0, -65.0), Color(1.0, 0.35, 0.1), false)
+	elif result.get("seal_burn_tick", false):
+		_spawn_floating_text("🔥 SCORCHED GROUND -3 HP", _player_node.position + Vector2(0, -65.0), Color(1.0, 0.5, 0.1), false)
 
 func _on_animation_finished(is_player: bool, new_state: BattleState) -> void:
 	if is_player:
@@ -1323,6 +1416,39 @@ func _on_battle_started(state: BattleState) -> void:
 				_demon_sprite.texture = stex
 		_demon_sprite.flip_h = should_flip
 
+	# Setup Demon Seal FX and Element Aura
+	if is_instance_valid(_demon_seal_fx):
+		if state.enemy_type == "guard" and state.gate_seal.length() > 0:
+			var s_icon = _get_seal_icon(state.gate_seal)
+			if s_icon:
+				_demon_seal_fx.texture = s_icon
+				_demon_seal_fx.visible = true
+				var sl := state.gate_seal.to_lower()
+				var seal_col := Color(1.0, 0.45, 0.15, 0.85)
+				if "shadow" in sl or "void" in sl:
+					seal_col = Color(0.75, 0.2, 1.0, 0.85)
+				elif "blood" in sl:
+					seal_col = Color(1.0, 0.15, 0.25, 0.85)
+				_demon_seal_fx.modulate = Color(seal_col.r, seal_col.g, seal_col.b, 0.45)
+				if is_instance_valid(_demon_aura):
+					_demon_aura.modulate = seal_col
+		elif (state.enemy_type == "boss" or state.enemy_type == "demon") and state.boss_weapon.length() > 0:
+			var w_icon = _get_weapon_icon("boss", state.boss_weapon)
+			if w_icon:
+				_demon_seal_fx.texture = w_icon
+				_demon_seal_fx.visible = true
+				var wl := state.boss_weapon.to_lower()
+				var boss_col := Color(1.0, 0.35, 0.1, 0.85)
+				if "staff" in wl or "shadow" in wl:
+					boss_col = Color(0.75, 0.2, 1.0, 0.85)
+				elif "trident" in wl or "blood" in wl:
+					boss_col = Color(1.0, 0.15, 0.25, 0.85)
+				_demon_seal_fx.modulate = Color(boss_col.r, boss_col.g, boss_col.b, 0.45)
+				if is_instance_valid(_demon_aura):
+					_demon_aura.modulate = boss_col
+		else:
+			_demon_seal_fx.visible = false
+
 	_refresh_state_data(state)
 	_turn_label.text = "YOUR TURN  -  Select an action:"
 	_show_player_tip()
@@ -1364,6 +1490,37 @@ func _on_battle_ended(winner: String, final_state: BattleState) -> void:
 		)
 		_combat_column.add_child(_btn_return)
 
+func _retreat_from_battle() -> void:
+	if _manager:
+		_manager.stop_battle()
+	battle_hud_closed.emit("retreat")
+	queue_free()
+
+func _request_restart() -> void:
+	if _manager:
+		_manager.stop_battle()
+	restart_requested.emit()
+	queue_free()
+
+func _get_tactical_counter_tip(state: BattleState) -> String:
+	var strat := state.enemy_strategy.to_lower()
+	var seal_or_wep := (state.gate_seal if state.enemy_type == "guard" else state.boss_weapon).to_lower()
+
+	if "aggressive" in strat:
+		if "blood" in seal_or_wep or "trident" in seal_or_wep:
+			return "Lawan Agresif dengan Armor Pierce! Defend kurang efektif; segera serang habis-habisan dengan Heavy Attack & Potion tepat waktu!"
+		return "Musuh Agresif mengutamakan Heavy Attack! Gunakan giliranmu untuk [Defend] saat bersiap, lalu balas dengan Heavy Attack saat ia jeda."
+	elif "defensive" in strat:
+		return "Musuh sering menangkis & meminum Potion! Jangan boros Heavy Attack saat ia Defending; gunakan momen ini untuk Potion atau kumpulkan HP!"
+	elif "tactical" in strat:
+		if "shadow" in seal_or_wep or "staff" in seal_or_wep:
+			return "Musuh Taktis menyedot HP (Soul Drain)! Berikan damage besar (Heavy Attack) agar melampaui regenerasi darahnya."
+		elif "flame" in seal_or_wep or "scythe" in seal_or_wep:
+			return "Musuh Taktis dengan Infernal Burn! Pertarungan cepat lebih baik sebelum damage DoT api membakar sisa HP kamu."
+		return "AI menghitung 3-4 langkah ke depan! Hindari pola monoton dan gunakan Potion saat HP di bawah 35%."
+	else:
+		return "Manfaatkan giliran saat lawan tidak Defending untuk melancarkan kombo serangan terkuatmu."
+
 # -----------------------------------------------------------------------------
 # STATE REFRESH & SMOOTH HP TRANSITION
 # -----------------------------------------------------------------------------
@@ -1391,6 +1548,22 @@ func _refresh_state_data(state: BattleState) -> void:
 	_refresh_action_buttons(state)
 	_refresh_defending_badges(state)
 	_update_strategic_assessment(state)
+
+	# Update CSP Triplet & Passive Modular Box
+	if is_instance_valid(_lbl_csp_archetype):
+		_lbl_csp_archetype.text = state.enemy_name
+	if is_instance_valid(_lbl_csp_seal):
+		_lbl_csp_seal.text = state.gate_seal if state.gate_seal.length() > 0 else "None (Wilderness)"
+	if is_instance_valid(_lbl_csp_weapon):
+		_lbl_csp_weapon.text = state.boss_weapon if state.boss_weapon.length() > 0 else "None (Guard)"
+	if is_instance_valid(_lbl_csp_doctrine):
+		var doc_txt := state.enemy_strategy if state.enemy_strategy.length() > 0 else "Standard"
+		_lbl_csp_doctrine.text = "%s (Eval #%d)" % [doc_txt, _manager.ai_eval_func if _manager else 1]
+	if is_instance_valid(_lbl_csp_passive):
+		var pass_txt := state.gate_seal_effect if state.gate_seal_effect.length() > 0 else (state.boss_weapon_effect if state.boss_weapon_effect.length() > 0 else "Normal")
+		if state.player_burn_turns > 0:
+			pass_txt += " | Burn: %d turn" % state.player_burn_turns
+		_lbl_csp_passive.text = pass_txt
 
 func _refresh_action_buttons(state: BattleState) -> void:
 	if not is_instance_valid(state):
@@ -1678,6 +1851,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	match event.keycode:
+		KEY_ESCAPE:
+			_retreat_from_battle()
+		KEY_R:
+			_request_restart()
 		KEY_D:
 			_toggle_debug_sidebar()
 		KEY_P:

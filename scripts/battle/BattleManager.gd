@@ -204,11 +204,25 @@ func _build_result(before: BattleState, after: BattleState, action: int, is_npc:
 		was_blocked = before.npc_defending and \
 					  action in [MinimaxSolver.Action.ATTACK, MinimaxSolver.Action.HEAVY_ATTACK]
 
+	var lifesteal: bool = is_npc and heal_amt > 0 and action == MinimaxSolver.Action.ATTACK
+	var burn_applied: bool = is_npc and after.player_burn_turns > before.player_burn_turns
+	var burn_tick: bool = before.player_burn_turns > 0
+	var seal_burn_tick: bool = before.enemy_type == "guard" and before.gate_seal == "Seal of Flame"
+	var seal_block: bool = not is_npc and before.enemy_type == "guard" and before.gate_seal == "Seal of Blood" and action in [MinimaxSolver.Action.ATTACK, MinimaxSolver.Action.HEAVY_ATTACK]
+	var armor_pierced: bool = is_npc and before.player_defending and before.boss_weapon == "Blood Trident" and action in [MinimaxSolver.Action.ATTACK, MinimaxSolver.Action.HEAVY_ATTACK]
+
 	return {
-		"action":       action,
-		"action_name":  MinimaxSolver.action_name(action),
-		"action_icon":  MinimaxSolver.action_icon(action),
-		"damage_dealt": dmg_dealt,
-		"heal_amount":  heal_amt,
-		"was_blocked":  was_blocked
+		"action":         action,
+		"action_name":    MinimaxSolver.action_name(action),
+		"action_icon":    MinimaxSolver.action_icon(action),
+		"damage_dealt":   dmg_dealt,
+		"heal_amount":    heal_amt,
+		"was_blocked":    was_blocked,
+		"lifesteal":      lifesteal,
+		"burn_applied":   burn_applied,
+		"burn_tick":      burn_tick,
+		"seal_burn_tick": seal_burn_tick,
+		"seal_block":     seal_block,
+		"armor_pierced":  armor_pierced
 	}
+

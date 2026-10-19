@@ -27,6 +27,94 @@ var throne_origin: Vector2i = Vector2i(21, 4)
 var patrol_timer: float = 0.0
 var patrol_interval: float = 2.5
 
+# --- CSP Boss Weapons & Strategy Display ---
+var boss_weapon: String = "Flame Scythe"
+var boss_strategy: String = "Tactical"
+var weapon_sprite: Sprite2D = null
+var overhead_badge: Control = null
+
+func set_boss_config(wep_name: String, strat_name: String) -> void:
+	boss_weapon = wep_name
+	boss_strategy = strat_name
+	_update_boss_aura_color()
+	_setup_boss_weapon_sprite()
+	_setup_boss_overhead_badge()
+
+func _update_boss_aura_color() -> void:
+	if not aura_sprite:
+		return
+	var bw_lower = boss_weapon.to_lower()
+	if "cursed" in bw_lower:
+		aura_sprite.modulate = Color(0.7, 0.15, 0.95, 0.85) # Void Purple
+	elif "blood" in bw_lower or "trident" in bw_lower:
+		aura_sprite.modulate = Color(0.95, 0.15, 0.25, 0.85) # Blood Crimson
+	else:
+		aura_sprite.modulate = Color(1.0, 0.45, 0.1, 0.85) # Infernal Flame
+
+func _setup_boss_weapon_sprite() -> void:
+	if not weapon_sprite:
+		weapon_sprite = Sprite2D.new()
+		weapon_sprite.name = "BossWeaponSprite"
+		add_child(weapon_sprite)
+
+	var wep_sheet = load("res://assets/sprites/characters/demon/weapons_boss_sheet.png")
+	if wep_sheet:
+		var frame_w = 412.0 / 3.0
+		var col_idx = 0
+		var bw_lower = boss_weapon.to_lower()
+		if "cursed" in bw_lower:
+			col_idx = 1 # Cursed Blade
+		elif "blood" in bw_lower or "trident" in bw_lower:
+			col_idx = 2 # Blood Trident
+		else:
+			col_idx = 0 # Flame Scythe
+
+		var atlas = AtlasTexture.new()
+		atlas.atlas = wep_sheet
+		atlas.region = Rect2(col_idx * frame_w, 0, frame_w, 138)
+		weapon_sprite.texture = atlas
+		weapon_sprite.scale = Vector2(0.24, 0.24)
+		weapon_sprite.position = Vector2(20, -14)
+		weapon_sprite.z_index = 1
+
+func _setup_boss_overhead_badge() -> void:
+	if overhead_badge and is_instance_valid(overhead_badge):
+		overhead_badge.queue_free()
+
+	overhead_badge = Control.new()
+	overhead_badge.name = "BossOverheadBadge"
+	overhead_badge.position = Vector2(0, -42)
+	add_child(overhead_badge)
+
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.02, 0.08, 0.90)
+
+	var badge_col = Color(1.0, 0.35, 0.2)
+	if boss_strategy == "Defensive":
+		badge_col = Color(0.2, 0.7, 1.0)
+	elif boss_strategy == "Tactical":
+		badge_col = Color(0.8, 0.4, 1.0)
+
+	style.border_color = badge_col
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(3)
+	panel.add_theme_stylebox_override("panel", style)
+	overhead_badge.add_child(panel)
+
+	var lbl = Label.new()
+	lbl.text = "DEMON LORD\n[%s | %s]" % [boss_weapon, boss_strategy.to_upper()]
+	lbl.add_theme_font_size_override("font_size", 8)
+	lbl.add_theme_color_override("font_color", badge_col)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(lbl)
+
+	panel.position = Vector2(-panel.size.x / 2.0, -panel.size.y)
+	panel.resized.connect(func():
+		panel.position = Vector2(-panel.size.x / 2.0, -panel.size.y)
+	)
+
 # --- Sprite & Aura ---
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var aura_sprite: Sprite2D = $AuraSprite
@@ -157,6 +245,8 @@ func _physics_process(delta: float) -> void:
 		_play_anim("idle", last_dir)
 
 	_update_aura(delta, is_moving)
+	if is_instance_valid(weapon_sprite):
+		weapon_sprite.position.y = -14.0 + sin(pulse_time * 2.2) * 2.2
 
 	if not is_active or not player:
 		return

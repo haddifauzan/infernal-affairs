@@ -41,7 +41,47 @@ Tubes Tahap 3 mengombinasikan seluruh capaian dari tahap sebelumnya menjadi satu
   - Bos kalah -> [VICTORY SCREEN] Penaklukan Istana Neraka Sukses!
 ```
 
+### 1.1 Fitur Presentasi: Roaming Pause & Architecture Briefing Modal
+* **Kebutuhan Pengujian & Presentasi:** Saat mengeksplorasi map (mode roaming / di luar battle), presenter/pemain dapat menghentikan waktu permainan (*pause*) kapan saja menggunakan tombol `[P]` atau `[ESC]` (serta tombol interaktif `⏸ Pause [P]` pada HUD).
+* **Fungsi Pembekuan Total:** Seluruh pergerakan entitas (`PlayerEntity`, `DemonEntity`, `MinionEntity`), pencarian jalur real-time (A*/UCS), dan cooldown deteksi musuh dibekukan secara total (*freeze*) sehingga presenter dapat fokus menjelaskan konsep kepada penguji tanpa gangguan.
+* **Architecture Briefing Board:** Saat pause aktif, muncul modal berlatar obsidian gelap yang merangkum arsitektur 3 tahap Tubes:
+  1. **Tahap 1 (Pathfinding):** A* vs UCS, heuristik Manhattan, visualisasi titik jalur (*path dots*) & simpul terbuka (*frontier*).
+  2. **Tahap 2 (Adversarial Search):** Minimax turn-based duel, pemangkasan cabang $\alpha$-$\beta$ pruning, tree lookahead depth, dan variasi fungsi evaluasi heuristik.
+  3. **Tahap 3 (CSP & Local Search Balancer):** Triplet $\langle X, D, C \rangle$ 7-variabel penugasan benteng (AC-3, MRV, LCV), doktrin & efek pasif (*Burn*, *Lifesteal*, *Armor Pierce*), serta penyeimbang stat dinamis Simulated Annealing / Hill Climbing.
+  4. **Pintasan Kontrol Presenter:** Akses cepat tombol resume, restart permainan, buka scouting intel gerbang, dan instant level-up cheat.
+
+### 1.2 Kontrol Battle (Restart & Mundur), Diferensiasi Visual Guard/Seal, dan Peringatan Taktis Intel
+* **Navigasi & Kontrol Duel Selama Battle:**
+  * Tombol **Mundur (`🏃 Mundur [ESC]`)**: Menghentikan pertempuran aktif, keluar dari arena duel dengan aman, dan memulihkan HP pemain menjadi 50% di overworld agar pemain dapat kembali grinding atau menyusun ulang strategi.
+  * Tombol **Restart (`🔄 Restart [R]`)**: Langsung me-reset seluruh game dari awal (`start_new_game()`), mengacak ulang solusi CSP benteng neraka, me-regenerasi peta dan menempatkan pemain kembali di posisi awal.
+* **Diferensiasi Visual Penuh untuk Guard Type dan Gate Seal:**
+  * **Overworld Map:**
+    * *Guard Archetype:* Menampilkan 3 varian animasi sprite unik (`guard_knight.png`, `guard_shaman.png`, `guard_gargoyle.png`) dan senjata khas (`Greatsword`, `Void Staff`, `Chaos Mace`).
+    * *Gate Seal:* Menampilkan lambang segel magis melayang (`SealSprite` dari `seals_gate_sheet.png`: Api / Bayangan / Darah) dengan animasi melayang (*bobbing tween*), aura pijar (*AuraSprite*) yang berubah warna sesuai elemen segel, dan badge nama `[Archetype]\n[Seal | Strategy]` dengan warna tepi senada.
+    * *Gerbang Istana:* Segel magis berukuran besar terpasang pada pintu gerbang bersama label nama segel bercahaya neon.
+  * **Battle Arena:**
+    * *Header Lawan:* Avatar terpotong dari kisi 3x3 `avatar_grid_9guards.png` (Baris = Tipe Penjaga, Kolom = Segel Magis Gerbang), disertai ikon segel/senjata dan doktrin AI.
+    * *Panggung Duel:* Potret karakter resolusi tinggi untuk setiap tipe penjaga, efek sigil segel magis berputar (*rotating seal sigil VFX*) di belakang musuh, dan aura lantai neraka yang ter-tint sesuai elemen.
+* **Peringatan Intel & Tips Taktis Pemain (Guard & Boss):**
+  * **Pre-Battle Briefing Tab/Modal (`PreBattleBriefingModal`):** Tab modal berlatar obsidian yang muncul **sebelum tab duel arena dibuka** ketika pemain menantang Penjaga Gerbang atau Bos Neraka.
+    * *Tidak ada timer penutupan otomatis:* Modal tetap terbuka di layar sampai pemain menekan `[X] / [ENTER]` untuk masuk ke duel atau `[ESC]` untuk mundur/batal.
+    * *Identitas & Doktrin Musuh:* Menampilkan potret karakter resolusi tinggi, tipe penjaga/bos, doktrin AI (Aggressive, Defensive, Tactical), serta segel gerbang / senjata bos aktif.
+    * *Peringatan Mekanik Pasif Lengkap (Apa yang Dilakukan Segel/Senjata & Dampaknya):*
+      * **Seal of Blood (Penjaga Gerbang - Kulit Iblis):** Mereduksi seluruh damage fisik yang diterima Penjaga sebesar flat 4 poin per pukulan (`damage = max(1, damage - 4)`). Dampak: Serangan biasa pemain (`[Attack]` dengan damage rendah) terpangkas hingga 50%, membuat spam serangan biasa tidak berasa. Solusi: Wajib gunakan `[Heavy Attack]` (damage dasar besar) untuk menembus reduksi ini.
+      * **Blood Trident (Senjata Bos - Armor Pierce Mutlak):** Serangan tusukan Trisula Darah menembus 80-90% efektivitas perisai `[Defend]` pemain. Dampak: Menangkis dengan `[Defend]` adalah jebakan sia-sia karena damage tusukan tetap melukai HP pemain secara penuh. Solusi: Hentikan `[Defend]`, hadapi secara agresif dengan `[Heavy Attack]`, dan jaga HP > 45% dengan segera meminum `[Potion]`.
+      * **Seal of Flame (Penjaga Gerbang - Scorched Ground):** Lantai arena neraka memanggang pemain dengan 3 damage api tak langsung di akhir setiap ronde tanpa mempedulikan posisi Defend. Solusi: Mainkan tempo cepat (*Blitzkrieg*) dan segera tumbangkan musuh sebelum damage bara api terakumulasi.
+      * **Flame Scythe (Senjata Bos - Infernal Burn DoT):** Serangan Heavy Bos memicu luka bakar neraka sebesar -5 HP per giliran selama 2 ronde berturut-turut. Solusi: Pasang `[Defend]` saat Bos mengayunkan Heavy Attack untuk memotong 50% damage benturan awal sabit, dan netralisir sisa HP dengan `[Potion]`.
+      * **Seal of Shadow (Penjaga Gerbang - Hisap Jiwa 15%):** Serangan Penjaga menyerap 15% damage menjadi pemulihan HP-nya sendiri. Solusi: Pasang `[Defend]` saat musuh menyerang berat untuk memperkecil lifesteal lawan, lalu balas dengan `[Heavy Attack]` berdaya hancur tinggi.
+      * **Cursed Blade (Senjata Bos - Soul Drain 20%):** Setiap tebasan Bos menyerap 20% damage menjadi pemulihan HP Bos. Solusi: Pasang `[Defend]` saat Bos menyerang agar regenerasinya minim, lalu hantam dengan `[Heavy Attack]` telak saat momentum terbuka.
+    * *Panduan Tips Taktis Doktrin AI:* Memberi rekomendasi counter spesifik terhadap doktrin AI lawan:
+      * *Aggressive:* Menangkis serangan beratnya dengan `[Defend]` (kecuali bila musuh memakai Blood Trident), lalu serang balik saat musuh kelelahan.
+      * *Defensive:* Jangan boros pukulan berat saat lawan menangkis; manfaatkan untuk meminum Potion atau menyusun ritme.
+      * *Tactical:* AI menghitung 3-4 giliran ke depan (Minimax depth 3-4); variasikan pola dan konsumsi Potion sebelum HP di bawah 40%.
+    * *Kontrol Pemain:* Tombol `[ ⚔ Lanjut ke Battle (Tekan X / Enter) ]` untuk membuka duel, dan `[ 🏃 Mundur / Batal (Tekan ESC) ]` untuk kembali ke roaming overworld dengan aman.
+  * **Dynamic Balancer Pre-Battle Loading (`PreBattleLoadingOverlay`):** Menyeimbangkan stat musuh dengan Local Search (Simulated Annealing / Hill Climbing) dengan shortcut `[X] / [Enter]` untuk langsung masuk ke arena `BattleHUD`.
+
 ---
+
 
 ## 2. Formulasi CSP (Constraint Satisfaction Problem)
 
@@ -352,10 +392,14 @@ Untuk kebutuhan presentasi akademis, saat player menabrak/menantang Penjaga atau
    * Hubungkan pemanggilan Local Search ke animasi visual step-by-step.
    * Tambahkan tombol toggle algoritma untuk demo dosen.
 
-5. **Step 5 - Modular Guard & VFX Integration:**
-   * Pasang sistem weapon slot modular pada Penjaga Gerbang berdasarkan hasil solusi CSP.
-   * Pasang VFX serangan (Flame Slash, Void Orb, Earth Bash) pada aksi duel.
+5. **Step 5 - Visual & Modular CSP Integration (Selesai):**
+   * Pasang sistem visual modular Penjaga Gerbang (spritesheet, senjata modular, overhead badge) dan Bos Neraka (senjata tahta modular, aura berelemen, overhead badge) berdasarkan penugasan CSP.
+   * Pasang VFX serangan (*Flame Slash*, *Void Orb*, *Earth Bash*) dan floating callouts (*Armor Pierce*, *Lifesteal*, *Infernal Burn*, *Seal Ward*) pada arena duel.
+   * Hadirkan kartu **Jaringan Kendala CSP (AC-3)** pada Pre-Battle Loading Overlay yang memetakan relasi C1–C5 secara interaktif dengan backdrop `panel_loading_bg.png`.
+   * Hadirkan **Gate Scouting Modal Dialog** saat player memeriksa papan peringatan gerbang (`gate_warning_sign.png`) untuk deduksi taktis CSP pra-pertempuran.
+   * Tambahkan indikator visual *Castle Key* (`icon_castle_key.png`) dan radar target gerbang pada Player Stats HUD di overworld.
 
 6. **Step 6 - Penulisan Laporan & Dokumentasi:**
    * Masukkan tabel komparasi matematis CSP (MRV vs tanpa MRV, iterasi AC-3) dan Local Search (Hill Climbing vs SA).
-   * Dokumentasikan screenshot Pre-Battle Loading Screen dan visualisasi graf CSP sebagai bukti implementasi nyata.
+   * Dokumentasikan screenshot Pre-Battle Loading Screen, Gate Scouting Dialog, dan visualisasi graf CSP sebagai bukti implementasi nyata.
+
