@@ -69,6 +69,7 @@ var _lbl_pot_comp: Label
 var _lbl_depth_comp: Label
 
 func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 15
 
 func _ready() -> void:
@@ -494,7 +495,8 @@ func _run_optimization() -> void:
 	var player_power: float = LocalSearchBalancer.calculate_player_power(p_hp, p_atk, p_def, p_pot)
 
 	var bounds: Dictionary = LocalSearchBalancer.get_domain_bounds(player_stats, player_power)
-	var s0: Dictionary = LocalSearchBalancer.get_initial_state(enemy_type, player_stats)
+	var p_tier: int = int(csp_context.get("passive_tier", 1))
+	var s0: Dictionary = LocalSearchBalancer.get_initial_state(enemy_type, player_stats, p_tier)
 
 	if current_algo == "sa":
 		_algo_btn.text = "Algo: Simulated Annealing (Swap)"
@@ -626,7 +628,8 @@ func _on_proceed_pressed() -> void:
 	# Ensure final state is used
 	var best_s: Dictionary = balancer_result.get("best_state", {})
 	if best_s.is_empty():
-		best_s = LocalSearchBalancer.get_initial_state(enemy_type, player_stats)
+		var p_tier: int = int(csp_context.get("passive_tier", 1))
+		best_s = LocalSearchBalancer.get_initial_state(enemy_type, player_stats, p_tier)
 
 	var config := {
 		"enemy_type": enemy_type,

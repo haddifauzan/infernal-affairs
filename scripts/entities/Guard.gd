@@ -19,6 +19,11 @@ var overhead_badge: Control = null
 var weapon_sprite: Sprite2D = null
 var seal_sprite: Sprite2D = null
 
+# --- Tahap 4: Logic & Planning Integration ---
+var is_revealed: bool = false
+var supply_count: int = 0
+var passive_tier: int = 1 # 0: Weakened, 1: Standard, 2: Overcharged
+
 func set_guard_config(g_type: String, g_strat: String = "Aggressive", g_seal: String = "Seal of Flame") -> void:
 	guard_archetype = g_type
 	guard_strategy = g_strat
@@ -29,6 +34,36 @@ func set_guard_config(g_type: String, g_strat: String = "Aggressive", g_seal: St
 	_setup_overhead_badge()
 	_setup_weapon_sprite()
 	_setup_seal_sprite()
+
+## Tahap 4: Adds elemental supply delivered by a minion.
+func add_supply(elem: String) -> void:
+	supply_count += 1
+	if supply_count >= 2:
+		passive_tier = 2 # Overcharged!
+	elif supply_count == 1:
+		passive_tier = 1 # Standard
+	_setup_overhead_badge()
+
+	# Visual flash when receiving supply
+	if is_instance_valid(anim_sprite):
+		var tw = create_tween()
+		tw.tween_property(anim_sprite, "modulate", Color(2.0, 1.8, 1.2), 0.2)
+		tw.tween_property(anim_sprite, "modulate", Color.WHITE, 0.3)
+
+## Tahap 4: Awaken the guard when Player reaches Level 2
+func awaken_guard(dialog_text: String = "") -> void:
+	if is_revealed:
+		return
+	is_revealed = true
+	_setup_overhead_badge()
+	_setup_seal_sprite()
+	_update_aura_color()
+
+	# Dramatic awakening burst VFX
+	if is_instance_valid(aura_sprite):
+		var tw = create_tween()
+		tw.tween_property(aura_sprite, "scale", AURA_BASE_SCALE * 2.2, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(aura_sprite, "scale", AURA_BASE_SCALE, 0.45)
 
 func set_guard_type(g_type: String) -> void:
 	set_guard_config(g_type, guard_strategy, gate_seal)
@@ -95,7 +130,11 @@ func _setup_seal_sprite() -> void:
 		seal_sprite.texture = atlas
 		seal_sprite.scale = Vector2(0.18, 0.18)
 		seal_sprite.position = Vector2(0, -56)
-		seal_sprite.modulate = seal_glow
+		# Tahap 4: If not revealed, display mysteriously dim with dark alpha
+		if is_revealed:
+			seal_sprite.modulate = seal_glow
+		else:
+			seal_sprite.modulate = Color(0.35, 0.35, 0.45, 0.35)
 		seal_sprite.z_index = 2
 
 func _setup_overhead_badge() -> void:
@@ -118,6 +157,10 @@ func _setup_overhead_badge() -> void:
 	elif "blood" in s_lower:
 		badge_col = Color(1.0, 0.15, 0.25)
 
+	# Tahap 4: Dim border when unrevealed
+	if not is_revealed:
+		badge_col = Color(0.6, 0.6, 0.65)
+
 	style.border_color = badge_col
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(4)
@@ -126,7 +169,16 @@ func _setup_overhead_badge() -> void:
 	overhead_badge.add_child(panel)
 
 	var lbl = Label.new()
-	lbl.text = "%s\n[%s | %s]" % [guard_archetype, gate_seal, guard_strategy.to_upper()]
+	if not is_revealed:
+		lbl.text = "??? [PENJAGA GERBANG]\n[ ? | SEGEL BELUM TERUNGKAP ]"
+	else:
+		var tier_str: String = "T%d" % passive_tier
+		if passive_tier == 2:
+			tier_str = "T2 OVERCHARGED"
+		elif passive_tier == 0:
+			tier_str = "T0 WEAKENED"
+		lbl.text = "%s\n[%s | %s] (%s)" % [guard_archetype, gate_seal, guard_strategy.to_upper(), tier_str]
+
 	lbl.add_theme_font_size_override("font_size", 8)
 	lbl.add_theme_color_override("font_color", badge_col)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

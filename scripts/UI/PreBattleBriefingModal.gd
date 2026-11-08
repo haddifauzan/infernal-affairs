@@ -23,18 +23,31 @@ var _root: MarginContainer
 var _panel: PanelContainer
 
 func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 16
 
 func setup_briefing(type: String, e_name: String, e_elem: String, e_wep: String, csp_extra: Dictionary = {}) -> void:
 	enemy_type = type
-	enemy_name = e_name
-	enemy_element = e_elem
-	enemy_weapon = e_wep
-	enemy_strategy = csp_extra.get("strategy", "Aggressive")
-	enemy_strategy_desc = csp_extra.get("strategy_desc", "")
-	gate_seal = csp_extra.get("gate_seal", "Seal of Flame")
-	gate_seal_effect = csp_extra.get("gate_seal_effect", "")
-	boss_weapon_effect = csp_extra.get("boss_weapon_effect", "")
+	var is_revealed: bool = csp_extra.get("is_revealed", true)
+
+	if enemy_type == "guard" and not is_revealed:
+		enemy_name = "??? [Penjaga Gerbang]"
+		enemy_element = "Unknown"
+		enemy_weapon = "Senjata Tak Dikenal"
+		enemy_strategy = csp_extra.get("strategy", "Aggressive")
+		enemy_strategy_desc = "Doktrin belum teridentifikasi (Capai Level 2)"
+		gate_seal = "Segel Kuno Tersembunyi [ ? ]"
+		gate_seal_effect = "Segel masih tertidur dan diselimuti kabut infernal. Capai Level 2 untuk membangkitkan penjaga!"
+		boss_weapon_effect = ""
+	else:
+		enemy_name = e_name
+		enemy_element = e_elem
+		enemy_weapon = e_wep
+		enemy_strategy = csp_extra.get("strategy", "Aggressive")
+		enemy_strategy_desc = csp_extra.get("strategy_desc", "")
+		gate_seal = csp_extra.get("gate_seal", "Seal of Flame")
+		gate_seal_effect = csp_extra.get("gate_seal_effect", "")
+		boss_weapon_effect = csp_extra.get("boss_weapon_effect", "")
 
 	# Guarantee fallback passive effect descriptions if not present
 	if enemy_type == "guard" and gate_seal_effect.is_empty():

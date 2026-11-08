@@ -37,6 +37,7 @@ var _npc_timer:   float = 0.0
 var _last_debug:  Dictionary = {}
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	solver = MinimaxSolver.new()
 
 # -----------------------------------------------------------------------------

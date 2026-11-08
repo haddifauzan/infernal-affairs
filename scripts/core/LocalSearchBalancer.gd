@@ -43,6 +43,7 @@ static func calculate_player_power(hp: int, atk: int, def: int, potions: int) ->
 	return float(hp) + (float(atk) * 2.5) + (float(def) * 3.0) + (float(potions) * 20.0)
 
 ## Calculates theoretical Combat Power for the NPC given state vector S.
+## Tahap 4: Inkorporasi daya pasif (P_passive) dari hasil suplai minion.
 static func calculate_npc_power(state: Dictionary) -> float:
 	var hp: float = float(state.get("hp", 100))
 	var atk: float = float(state.get("atk", 14))
@@ -51,8 +52,20 @@ static func calculate_npc_power(state: Dictionary) -> float:
 	var pot_count: float = float(state.get("potion_count", 1))
 	var pot_heal: float = float(state.get("potion_heal", 30))
 	var depth: float = float(state.get("minimax_depth", 2))
+	var passive_power: float = float(state.get("passive_power", 0.0))
 
-	return hp + (atk * 2.2) + (heavy_atk * 1.2) + (def * 3.0) + (pot_count * pot_heal * 0.7) + (depth * 15.0)
+	# Tahap 4: Dynamic passive tier scaling (0: Weakened, 1: Standard, 2: Overcharged)
+	if state.has("passive_tier"):
+		var tier: int = int(state.get("passive_tier", 1))
+		match tier:
+			0:
+				passive_power = -25.0 # Pasif lemah -> Local search menaikkan atribut fisik
+			1:
+				passive_power = 0.0   # Pasif standar baseline
+			2:
+				passive_power = 35.0  # Pasif kuat -> Local search menurunkan atribut fisik
+
+	return hp + (atk * 2.2) + (heavy_atk * 1.2) + (def * 3.0) + (pot_count * pot_heal * 0.7) + (depth * 15.0) + passive_power
 
 ## Objective/Fitness Function f(S) - Semakin mendekati 0 semakin sempurna.
 static func evaluate_fitness(state: Dictionary, player_power: float, target_ratio: float) -> float:
@@ -88,7 +101,7 @@ static func get_domain_bounds(p_stats: Dictionary = {}, player_power: float = 0.
 	}
 
 ## Generates an adaptive base state vector S_0 for an enemy type scaled to player stats.
-static func get_initial_state(enemy_type: String, p_stats: Dictionary = {}) -> Dictionary:
+static func get_initial_state(enemy_type: String, p_stats: Dictionary = {}, passive_tier: int = 1) -> Dictionary:
 	var p_hp: int = p_stats.get("hp", 100)
 	var p_atk: int = p_stats.get("attack", 12)
 	var p_def: int = p_stats.get("defense", 5)
@@ -102,7 +115,8 @@ static func get_initial_state(enemy_type: String, p_stats: Dictionary = {}) -> D
 				"def": maxi(6, int(p_def * 0.9)),
 				"potion_count": 1,
 				"potion_heal": 25,
-				"minimax_depth": 2
+				"minimax_depth": 2,
+				"passive_tier": passive_tier
 			}
 		"boss":
 			return {
@@ -112,7 +126,8 @@ static func get_initial_state(enemy_type: String, p_stats: Dictionary = {}) -> D
 				"def": maxi(9, int(p_def * 1.1)),
 				"potion_count": 2,
 				"potion_heal": 35,
-				"minimax_depth": 3
+				"minimax_depth": 3,
+				"passive_tier": passive_tier
 			}
 		_: # minion or default
 			return {
@@ -122,7 +137,8 @@ static func get_initial_state(enemy_type: String, p_stats: Dictionary = {}) -> D
 				"def": maxi(3, int(p_def * 0.6)),
 				"potion_count": 0,
 				"potion_heal": 20,
-				"minimax_depth": 1
+				"minimax_depth": 1,
+				"passive_tier": passive_tier
 			}
 
 ## Clamps state parameters to their valid domain ranges (using optional dynamic bounds).

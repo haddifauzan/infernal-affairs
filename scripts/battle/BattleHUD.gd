@@ -161,6 +161,7 @@ func init(manager: BattleManager) -> void:
 	_refresh_debug_config()
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 10
 	_build_ui()
 	_refresh_debug_config()
@@ -1830,7 +1831,7 @@ func _copy_exp_results() -> void:
 		DisplayServer.clipboard_set(_exp_log.get_parsed_text())
 		if is_instance_valid(_btn_copy_exp):
 			_btn_copy_exp.text = "Copied!"
-			await get_tree().create_timer(1.8).timeout
+			await get_tree().create_timer(1.8, true).timeout
 			if is_instance_valid(_btn_copy_exp):
 				_btn_copy_exp.text = "Copy to Clipboard"
 

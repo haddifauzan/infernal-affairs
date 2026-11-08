@@ -3,8 +3,10 @@ extends Node2D
 
 const PreBattleLoadingOverlayScript = preload("res://scripts/UI/PreBattleLoadingOverlay.gd")
 const PreBattleBriefingModalScript = preload("res://scripts/UI/PreBattleBriefingModal.gd")
+const ResourceNodeScript = preload("res://scripts/entities/ResourceNode.gd")
+const AwakeningBannerModalScript = preload("res://scripts/UI/AwakeningBannerModal.gd")
 
-## Main scene orchestrator for Infernal Affairs - Tahap 3 (Expanded 44x46 Layout).
+## Main scene orchestrator for Infernal Affairs - Tahap 4 (Logic & Automated Planning).
 ## Manages 2-map 3-zone world, NPC entities (Minion, Guard, Boss), encounter flow,
 ## player state progression, active A*/UCS search logic & live visualizations.
 
@@ -29,6 +31,12 @@ var battle_hud: BattleHUD
 # --- Tahap 3: CSP Solver & Configuration ---
 var csp_solver: CSPSolver = CSPSolver.new()
 var csp_result: Dictionary = {}
+
+# --- Tahap 4: Logic & Automated Planning Modules ---
+var logic_engine: LogicEngine = LogicEngine.new()
+var plan_solver: PlanSolver = PlanSolver.new()
+var resource_nodes: Array[ResourceNodeEntity] = []
+var awakening_modal: AwakeningBannerModal = null
 
 # --- Tahap 3: NPC Entities ---
 var minion_scene: PackedScene = preload("res://scenes/Minion.tscn")
@@ -146,6 +154,7 @@ func _ready() -> void:
 	# Create BattleManager node
 	battle_manager = BattleManager.new()
 	battle_manager.name = "BattleManager"
+	battle_manager.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(battle_manager)
 	battle_manager.battle_started.connect(_on_battle_started)
 	battle_manager.battle_ended.connect(_on_battle_ended)
@@ -167,7 +176,7 @@ func start_new_game() -> void:
 	is_game_over = false
 	is_in_battle = false
 	is_game_paused = false
-	get_tree().paused = false
+	_freeze_overworld_map(false)
 	boss_bgm_playing = false
 	encounter_cooldown = 0.0
 
@@ -193,14 +202,24 @@ func start_new_game() -> void:
 	if is_instance_valid(battle_hud):
 		battle_hud.queue_free()
 		battle_hud = null
+	if is_instance_valid(awakening_modal):
+		awakening_modal.queue_free()
+		awakening_modal = null
 	_cleanup_npcs()
+	_cleanup_resource_nodes()
 	_cleanup_map_props()
 
 	# Solve CSP for Castle Defense Assignment (Triplets <X, D, C> with MRV, LCV, AC-3)
 	csp_result = csp_solver.solve(true, true, true, true)
 	GameState.gate_req_level = csp_result.get("gate_req", 2)
-	if is_instance_valid(guard_entity):
-		guard_entity.set_guard_config(csp_result.get("guard_type", "Infernal Knight"), csp_result.get("guard_strategy", "Aggressive"), csp_result.get("gate_seal", "Seal of Flame"))
+
+	# Tahap 4: Initialize Knowledge-Based Logic Engine
+	var g_type: String = csp_result.get("guard_type", "Infernal Knight")
+	var s_name: String = csp_result.get("gate_seal", "Seal of Flame")
+	var b_wep: String  = csp_result.get("boss_weapon", "Flame Scythe")
+	logic_engine.initialize(g_type, s_name, b_wep)
+	logic_engine.guard_awakened.connect(_on_guard_awakened)
+	logic_engine.seal_revealed.connect(_on_seal_revealed)
 
 	# Generate expanded 2-map 3-zone layout
 	grid_manager.generate_new_map()
@@ -224,11 +243,14 @@ func start_new_game() -> void:
 	demon.set_algorithm(current_algorithm)
 	demon.set_boss_config(csp_result.get("boss_weapon", "Flame Scythe"), csp_result.get("boss_strategy", "Tactical"))
 
-	# Spawn Minions with Player reference and active algorithm
-	_spawn_minions()
+	# Spawn Elemental Altars in Wilderness (Tahap 4)
+	_spawn_resource_nodes()
 
 	# Spawn Guard at the gate courtyard (Zone 2)
 	_spawn_guard()
+
+	# Spawn Minions with Player reference, active algorithm, and Automated Carrier Plans (Tahap 4)
+	_spawn_minions()
 
 	# Place map props (Gate, Warning Sign, Throne)
 	_place_map_props()
@@ -243,15 +265,43 @@ func start_new_game() -> void:
 	_update_algo_label()
 	_update_player_stats_hud()
 	_update_debug_hud()
-	info_label.text = "Infernal Affairs - Tahap 3  |  [L] Cheat Lv-Up  |  [K] Auto-Lv  |  [Tab] A*/UCS  |  [F3] Debug  |  [R] Reset"
+	info_label.text = "Infernal Affairs - Tahap 4 (Logic & Planning)  |  [L] Cheat Lv-Up  |  [K] Auto-Lv  |  [Tab] A*/UCS  |  [F3] Debug  |  [R] Reset"
 
 func _on_grid_updated() -> void:
 	arena_map.build_map(grid_manager)
 
 # ---------------------------------------------------------------
-# NPC SPAWNING
+# NPC & RESOURCE SPAWNING (Tahap 4)
 # ---------------------------------------------------------------
+func _spawn_resource_nodes() -> void:
+	_cleanup_resource_nodes()
+	var altars_def = [
+		{"pos": Vector2i(8, 38), "elem": "Flame", "name": "Ignis Altar"},
+		{"pos": Vector2i(35, 38), "elem": "Shadow", "name": "Abyssal Fissure"},
+		{"pos": Vector2i(21, 32), "elem": "Blood", "name": "Sanguine Well"}
+	]
+	for def in altars_def:
+		var node: ResourceNodeEntity = ResourceNodeScript.new() as ResourceNodeEntity
+		node.name = def["name"].replace(" ", "_")
+		node.process_mode = Node.PROCESS_MODE_PAUSABLE
+		add_child(node)
+		node.initialize(grid_manager, def["pos"], def["elem"], def["name"])
+		resource_nodes.append(node)
+
+func _cleanup_resource_nodes() -> void:
+	for n in resource_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	resource_nodes.clear()
+
 func _spawn_minions() -> void:
+	var carrier_altars: Array[Vector2i] = [
+		Vector2i(8, 38),
+		Vector2i(35, 38),
+		Vector2i(21, 32)
+	]
+	var carrier_elems: Array[String] = ["Flame", "Shadow", "Blood"]
+
 	for i in range(MINION_COUNT):
 		var minion: MinionEntity = minion_scene.instantiate() as MinionEntity
 		minion.name = "Minion_%d" % i
@@ -259,9 +309,23 @@ func _spawn_minions() -> void:
 		add_child(minion)
 
 		var pos = grid_manager.get_random_wilderness_pos()
-		# Initialize with GridManager, spawn position, and Player reference for chase AI!
 		minion.initialize(grid_manager, pos, player)
 		minion.set_algorithm(current_algorithm)
+
+		# Tahap 4: First 3 minions configured as Autonomous Carrier Agents with Classical Planning
+		if i < 3:
+			var node: ResourceNodeEntity = resource_nodes[i] if i < resource_nodes.size() else null
+			minion.configure_as_carrier(
+				carrier_altars[i],
+				carrier_elems[i],
+				guard_grid_pos,
+				boss_grid_pos,
+				node
+			)
+			minion.supply_delivered.connect(_on_minion_supply_delivered)
+			minion.shard_harvested.connect(_on_minion_shard_harvested)
+
+		minion.defeated.connect(_on_minion_defeated)
 		spawned_minions.append(minion)
 
 func _spawn_guard() -> void:
@@ -341,13 +405,9 @@ func _place_map_props() -> void:
 		gate_seal_sprite.position = Vector2(center_x_world, (GridManager.GATE_Y - 0.25) * ts)
 		gate_seal_sprite.scale = Vector2(0.32, 0.32)
 		gate_seal_sprite.z_index = int((GridManager.GATE_Y + 1.0) * ts) + 2
-		gate_seal_sprite.modulate = seal_glow
-		add_child(gate_seal_sprite)
 
 		gate_seal_label = Label.new()
-		gate_seal_label.text = "✦ %s ✦" % seal_name.to_upper()
 		gate_seal_label.add_theme_font_size_override("font_size", 9)
-		gate_seal_label.add_theme_color_override("font_color", seal_glow)
 		gate_seal_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 		gate_seal_label.add_theme_constant_override("shadow_offset_x", 1)
 		gate_seal_label.add_theme_constant_override("shadow_offset_y", 1)
@@ -355,6 +415,18 @@ func _place_map_props() -> void:
 		gate_seal_label.position = Vector2(center_x_world - 80, (GridManager.GATE_Y - 1.35) * ts)
 		gate_seal_label.size = Vector2(160, 20)
 		gate_seal_label.z_index = gate_seal_sprite.z_index + 1
+
+		# Tahap 4: Partial Observability (Unrevealed until Level 2 / Guard Awakened)
+		if logic_engine and logic_engine.is_seal_revealed:
+			gate_seal_sprite.modulate = seal_glow
+			gate_seal_label.text = "✦ %s ✦" % seal_name.to_upper()
+			gate_seal_label.add_theme_color_override("font_color", seal_glow)
+		else:
+			gate_seal_sprite.modulate = Color(0.35, 0.35, 0.45, 0.35)
+			gate_seal_label.text = "✦ [ ? ] SEGEL PURBA ✦"
+			gate_seal_label.add_theme_color_override("font_color", Color(0.65, 0.65, 0.70))
+
+		add_child(gate_seal_sprite)
 		add_child(gate_seal_label)
 
 	# 2. Gate Warning Sign
@@ -377,6 +449,93 @@ func _place_map_props() -> void:
 		throne_sprite.scale = Vector2(0.38, 0.38)
 		throne_sprite.z_index = int((GridManager.THRONE_Y + 2.0) * ts)
 		add_child(throne_sprite)
+
+# ---------------------------------------------------------------
+# TAHAP 4: PLANNING & LOGIC SIGNALS & REVEAL HANDLING
+# ---------------------------------------------------------------
+func _on_minion_supply_delivered(_minion: MinionEntity, target_name: String, elem: String) -> void:
+	if target_name == "Guard":
+		if is_instance_valid(guard_entity):
+			guard_entity.add_supply(elem)
+			_show_floating_alert("Minion menyuplai %s ke Penjaga Gerbang! (Pasif Menguat: T%d)" % [
+				elem, guard_entity.passive_tier
+			], Color(1.0, 0.45, 0.15))
+	else:
+		_show_floating_alert("Minion menyuplai %s ke Demon Lord! (Senjata Diperkuat)" % elem, Color(1.0, 0.2, 0.2))
+
+func _on_minion_shard_harvested(minion: MinionEntity, elem: String) -> void:
+	var node: ResourceNodeEntity = minion.target_resource_node
+	if not is_instance_valid(node):
+		for r in resource_nodes:
+			if is_instance_valid(r) and (r.grid_pos == minion.target_altar_pos or r.element_type.to_lower() == elem.to_lower()):
+				node = r
+				break
+	if is_instance_valid(node):
+		_show_floating_alert("Minion memanen Shard %s dari %s! [Tersisa: %d/3]" % [
+			elem, node.node_name, node.current_shards
+		], Color(1.0, 0.8, 0.25))
+	else:
+		_show_floating_alert("Minion memanen Shard %s dari Altar!" % elem, Color(1.0, 0.8, 0.25))
+
+func _on_minion_defeated(minion: MinionEntity) -> void:
+	var remaining: int = _count_alive_minions() - 1
+	if is_instance_valid(logic_engine):
+		logic_engine.record_minion_defeated(minion.carried_element, remaining)
+	if minion.carried_element != "":
+		_show_floating_alert("Minion dijatuhkan! Esensi %s berhasil disabotase." % minion.carried_element, Color(0.2, 1.0, 0.6))
+
+func _on_guard_awakened(dialog_text: String) -> void:
+	if is_instance_valid(guard_entity):
+		guard_entity.awaken_guard(dialog_text)
+
+	_shake_camera(0.6, 6.0)
+	_play_sfx(sfx_encounter_alert)
+
+	if is_instance_valid(awakening_modal):
+		awakening_modal.queue_free()
+
+	awakening_modal = AwakeningBannerModalScript.new() as AwakeningBannerModal
+	awakening_modal.setup(dialog_text, csp_result.get("gate_seal", "Seal of Flame"))
+	awakening_modal.closed.connect(func():
+		_freeze_overworld_map(false)
+	)
+	_freeze_overworld_map(true)
+	$CanvasLayer.add_child(awakening_modal)
+
+	_reveal_gate_seal_visuals()
+
+func _on_seal_revealed(_seal_name: String, _seal_eff: String) -> void:
+	_reveal_gate_seal_visuals()
+
+func _reveal_gate_seal_visuals() -> void:
+	var seal_name: String = csp_result.get("gate_seal", "Seal of Flame")
+	var seal_glow: Color = Color(1.0, 0.45, 0.15, 0.95)
+	if "shadow" in seal_name.to_lower():
+		seal_glow = Color(0.75, 0.2, 1.0, 0.95)
+	elif "blood" in seal_name.to_lower():
+		seal_glow = Color(1.0, 0.15, 0.25, 0.95)
+
+	if is_instance_valid(gate_seal_sprite):
+		var tw = create_tween()
+		tw.tween_property(gate_seal_sprite, "modulate", Color(2.5, 2.5, 2.5, 1.0), 0.2)
+		tw.tween_property(gate_seal_sprite, "modulate", seal_glow, 0.4)
+
+	if is_instance_valid(gate_seal_label):
+		gate_seal_label.text = "✦ %s ✦" % seal_name.to_upper()
+		gate_seal_label.add_theme_color_override("font_color", seal_glow)
+
+	_update_player_stats_hud()
+	_update_debug_hud()
+
+func _shake_camera(duration: float = 0.5, intensity: float = 5.0) -> void:
+	if not camera:
+		return
+	var tw = create_tween()
+	var steps = int(duration * 20)
+	for i in range(steps):
+		var offset = Vector2(randf_range(-intensity, intensity), randf_range(-intensity, intensity))
+		tw.tween_property(camera, "offset", offset, 0.025)
+	tw.tween_property(camera, "offset", Vector2.ZERO, 0.05)
 
 # ---------------------------------------------------------------
 # DEMON BOSS AI PATH & ENCOUNTER HANDLERS
@@ -528,9 +687,7 @@ func _handle_boss_encounter() -> void:
 
 func _show_pre_battle_briefing(type: String, enemy_node: Node2D) -> void:
 	is_in_battle = true
-	player.is_active = false
-	if demon:
-		demon.is_active = false
+	_freeze_overworld_map(true)
 	if is_instance_valid(player_hud_panel):
 		player_hud_panel.visible = false
 
@@ -553,6 +710,8 @@ func _show_pre_battle_briefing(type: String, enemy_node: Node2D) -> void:
 		csp_extra["strategy_desc"] = csp_result.get("guard_strategy_desc", "")
 		csp_extra["eval_func"] = csp_result.get("guard_eval_func", 1)
 		csp_extra["action_order"] = csp_result.get("guard_action_order", 1)
+		csp_extra["is_revealed"] = guard_entity.is_revealed if is_instance_valid(guard_entity) else false
+		csp_extra["passive_tier"] = guard_entity.passive_tier if is_instance_valid(guard_entity) else 1
 	else: # "boss"
 		var b_wep: String = csp_result.get("boss_weapon", "Flame Scythe")
 		enemy_title = "Demon Lord (%s)" % b_wep
@@ -563,6 +722,8 @@ func _show_pre_battle_briefing(type: String, enemy_node: Node2D) -> void:
 		csp_extra["strategy_desc"] = csp_result.get("boss_strategy_desc", "")
 		csp_extra["eval_func"] = csp_result.get("boss_eval_func", 3)
 		csp_extra["action_order"] = csp_result.get("boss_action_order", 0)
+		csp_extra["is_revealed"] = true
+		csp_extra["passive_tier"] = 1
 
 	pre_battle_briefing_modal.setup_briefing(type, enemy_title, enemy_elem, enemy_wep, csp_extra)
 
@@ -572,9 +733,7 @@ func _show_pre_battle_briefing(type: String, enemy_node: Node2D) -> void:
 
 	pre_battle_briefing_modal.cancelled.connect(func():
 		is_in_battle = false
-		player.is_active = true
-		if demon and not GameState.boss_defeated:
-			demon.is_active = true
+		_freeze_overworld_map(false)
 		if is_instance_valid(player_hud_panel):
 			player_hud_panel.visible = true
 			_update_player_stats_hud()
@@ -585,9 +744,7 @@ func _show_pre_battle_briefing(type: String, enemy_node: Node2D) -> void:
 
 func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 	is_in_battle = true
-	player.is_active = false
-	if demon:
-		demon.is_active = false
+	_freeze_overworld_map(true)
 	if is_instance_valid(player_hud_panel):
 		player_hud_panel.visible = false
 
@@ -607,6 +764,8 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 		csp_extra["strategy_desc"] = csp_result.get("guard_strategy_desc", "")
 		csp_extra["eval_func"] = csp_result.get("guard_eval_func", 1)
 		csp_extra["action_order"] = csp_result.get("guard_action_order", 1)
+		csp_extra["is_revealed"] = guard_entity.is_revealed if is_instance_valid(guard_entity) else false
+		csp_extra["passive_tier"] = guard_entity.passive_tier if is_instance_valid(guard_entity) else 1
 	else: # "boss"
 		var b_wep: String = csp_result.get("boss_weapon", "Flame Scythe")
 		enemy_title = "Demon Lord (%s)" % b_wep
@@ -617,6 +776,8 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 		csp_extra["strategy_desc"] = csp_result.get("boss_strategy_desc", "")
 		csp_extra["eval_func"] = csp_result.get("boss_eval_func", 3)
 		csp_extra["action_order"] = csp_result.get("boss_action_order", 0)
+		csp_extra["is_revealed"] = true
+		csp_extra["passive_tier"] = 1
 
 	overlay.setup_encounter(type, enemy_title, enemy_elem, enemy_wep, GameState.get_status_summary(), csp_extra)
 
@@ -627,8 +788,9 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 					if is_instance_valid(guard_entity):
 						guard_entity.on_defeated()
 					GameState.award_guard_victory()
+					_dismiss_all_minions()
 					_play_sfx(sfx_level_up)
-					_show_floating_alert("Penjaga Dikalahkan! Castle Key Diperoleh! Naik ke Level 3! Gerbang Terbuka!", Color(1.0, 0.85, 0.0))
+					_show_floating_alert("Penjaga Dikalahkan! Castle Key Diperoleh! Minion Mundur & Gerbang Terbuka!", Color(1.0, 0.85, 0.0))
 				elif winner == "retreat":
 					GameState.hp = maxi(30, int(GameState.max_hp * 0.5))
 					GameState.hp_changed.emit(GameState.hp)
@@ -661,9 +823,7 @@ func _open_pre_battle_overlay(type: String, _enemy_node: Node2D) -> void:
 
 	overlay.cancelled.connect(func():
 		is_in_battle = false
-		player.is_active = true
-		if demon and not GameState.boss_defeated:
-			demon.is_active = true
+		_freeze_overworld_map(false)
 		if is_instance_valid(player_hud_panel):
 			player_hud_panel.visible = true
 			_update_player_stats_hud()
@@ -679,9 +839,7 @@ func test_direct_battle(enemy_t: String, guard_arch: String = "") -> void:
 	var p_stats: Dictionary = GameState.get_player_combat_stats()
 	var def_cb: Callable = func(_winner: String):
 		is_in_battle = false
-		player.is_active = true
-		if demon and not GameState.boss_defeated:
-			demon.is_active = true
+		_freeze_overworld_map(false)
 		if is_instance_valid(player_hud_panel):
 			player_hud_panel.visible = true
 			_update_player_stats_hud()
@@ -743,11 +901,22 @@ func test_direct_battle(enemy_t: String, guard_arch: String = "") -> void:
 			}
 	_start_battle_encounter(config, def_cb)
 
+## Freezes or unfreezes the overworld map during encounters, modals, and battles.
+func _freeze_overworld_map(freeze: bool) -> void:
+	get_tree().paused = freeze
+	for m in spawned_minions:
+		if is_instance_valid(m) and not m.is_defeated:
+			m.is_active = not freeze
+	if is_instance_valid(guard_entity) and not guard_entity.is_defeated:
+		guard_entity.is_active = not freeze
+	if is_instance_valid(demon) and not GameState.boss_defeated:
+		demon.is_active = not freeze
+	if is_instance_valid(player):
+		player.is_active = not freeze
+
 func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> void:
 	is_in_battle = true
-	player.is_active = false
-	if demon:
-		demon.is_active = false
+	_freeze_overworld_map(true)
 	if is_instance_valid(player_hud_panel):
 		player_hud_panel.visible = false
 
@@ -760,19 +929,18 @@ func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> vo
 
 	battle_hud.restart_requested.connect(func():
 		is_in_battle = false
+		_freeze_overworld_map(false)
 		start_new_game()
 	)
 
 	battle_hud.battle_hud_closed.connect(func(winner: String):
 		is_in_battle = false
-		player.is_active = true
-		if demon and not GameState.boss_defeated:
-			demon.is_active = true
+		on_finished_cb.call(winner)
+		_freeze_overworld_map(false)
 		if is_instance_valid(player_hud_panel):
 			player_hud_panel.visible = true
 			_update_player_stats_hud()
 		encounter_cooldown = ENCOUNTER_COOLDOWN_TIME
-		on_finished_cb.call(winner)
 		_update_debug_hud()
 	)
 
@@ -782,7 +950,18 @@ func _start_battle_encounter(config: Dictionary, on_finished_cb: Callable) -> vo
 # ---------------------------------------------------------------
 # GATE STATE CHANGES
 # ---------------------------------------------------------------
+func _dismiss_all_minions() -> void:
+	for m in spawned_minions:
+		if is_instance_valid(m) and not m.is_defeated:
+			m.is_active = false
+			m.is_defeated = true
+			var tw = m.create_tween()
+			tw.tween_property(m, "modulate:a", 0.0, 0.8)
+			tw.tween_callback(m.queue_free)
+	spawned_minions.clear()
+
 func _on_gate_unlocked() -> void:
+	_dismiss_all_minions()
 	_play_sfx(sfx_gate_unlock)
 	if is_instance_valid(gate_seal_sprite):
 		var stw = create_tween()
@@ -818,8 +997,11 @@ func _on_gate_unlocked() -> void:
 func _on_key_obtained() -> void:
 	_show_floating_alert("Castle Key diperoleh!", Color(1.0, 0.75, 0.0))
 
-func _on_level_changed(_new_level: int) -> void:
+func _on_level_changed(new_level: int) -> void:
 	_update_debug_hud()
+	_update_player_stats_hud()
+	if is_instance_valid(logic_engine):
+		logic_engine.update_player_level(new_level)
 
 # ---------------------------------------------------------------
 # FLOATING ALERT NOTIFICATION
@@ -1037,6 +1219,17 @@ func _update_debug_hud() -> void:
 		csp_result.get("time_ms", 0.0)
 	]
 
+	# Tahap 4: Logic & Automated Planning Live Status
+	var p_tier_str: String = "T1 Standard"
+	if is_instance_valid(guard_entity):
+		if guard_entity.passive_tier == 2: p_tier_str = "T2 OVERCHARGED"
+		elif guard_entity.passive_tier == 0: p_tier_str = "T0 WEAKENED"
+
+	var reveal_str: String = "REVEALED" if (logic_engine and logic_engine.is_seal_revealed) else "HIDDEN [?]"
+	debug_label.text += "\n[color=yellow]-- Tahap 4: Logic & Planning --[/color]\nSeal Status: [color=cyan]%s[/color] | Guard Pasif: [color=orange]%s[/color]\nMinion Planning: [color=green]STRIPS Forward Search[/color]\nLogic Inference: [color=green]Forward Chaining KB[/color]" % [
+		reveal_str, p_tier_str
+	]
+
 func _count_alive_minions() -> int:
 	var count := 0
 	for m in spawned_minions:
@@ -1136,7 +1329,7 @@ func _update_algo_label() -> void:
 		algo_label.modulate = Color("#00f5d4") if current_algorithm == "astar" else Color("#ffbe0b")
 
 func _physics_process(delta: float) -> void:
-	if is_game_paused:
+	if is_game_paused or is_in_battle:
 		return
 
 	if encounter_cooldown > 0.0:
@@ -1669,14 +1862,7 @@ func _pause_game() -> void:
 	if is_game_paused or is_in_battle or is_game_over:
 		return
 	is_game_paused = true
-	get_tree().paused = true
-
-	# Explicitly freeze movement of entities
-	if player: player.is_active = false
-	if demon: demon.is_active = false
-	for m in spawned_minions:
-		if is_instance_valid(m):
-			m.is_active = false
+	_freeze_overworld_map(true)
 
 	if is_instance_valid(gate_scout_modal):
 		gate_scout_modal.queue_free()
@@ -1689,16 +1875,8 @@ func _resume_game() -> void:
 	if not is_game_paused:
 		return
 	is_game_paused = false
-	get_tree().paused = false
-
-	# Restore entity activity
-	if player and not is_in_battle and not is_game_over:
-		player.is_active = true
-	if demon and not is_in_battle and not GameState.boss_defeated:
-		demon.is_active = true
-	for m in spawned_minions:
-		if is_instance_valid(m) and not m.is_defeated:
-			m.is_active = true
+	if not is_in_battle:
+		_freeze_overworld_map(false)
 
 	if is_instance_valid(pause_modal):
 		pause_modal.queue_free()
@@ -1884,6 +2062,18 @@ func _build_pause_modal() -> void:
 		"[color=#ffbe0b][b]• Intel Scouting:[/b][/color] Periksa papan gerbang untuk deduksi taktis sebelum menantang Penjaga."
 	)
 	cards_row.add_child(c3)
+
+	# Card 4: Tahap 4 Logic & Automated Planning
+	var c4 := _make_concept_card(
+		"TAHAP 4: LOGIC & PLANNING",
+		"STRIPS & Forward Chaining KB",
+		Color(0.25, 0.85, 1.0),
+		"[color=#64dfdf][b]• Automated Planning (STRIPS):[/b][/color] Minion merencanakan rute panen altar & suplai ke Guard/Boss.\n" +
+		"[color=#64dfdf][b]• 3 Altar Wilderness:[/b][/color] Altar Api, Bayangan, & Darah menyuplai penguatan pasif Tier 0 s.d T2.\n" +
+		"[color=#64dfdf][b]• Guard Awakening:[/b][/color] Segel tersembunyi hingga Level 2 memicu kebangkitan penjaga gerbang.\n" +
+		"[color=#64dfdf][b]• KB Forward Chaining:[/b][/color] Deduksi esensi musuh & balancing adaptif terbalik pada Local Search."
+	)
+	cards_row.add_child(c4)
 
 	# --- PRESENTATION SHORTCUTS BAR ---
 	var sc_panel := PanelContainer.new()

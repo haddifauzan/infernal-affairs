@@ -1,4 +1,4 @@
-﻿# 🔥 INFERNAL AFFAIRS: Hybrid AI Game Architecture
+# 🔥 INFERNAL AFFAIRS: Hybrid AI Game Architecture
 > **Tugas Besar Mata Kuliah Kecerdasan Buatan (Artificial Intelligence)**  
 > **Program Studi Ilmu Komputer — Semester 3**  
 > **Kelompok 10:**  
@@ -6,19 +6,23 @@
 > - **(2507609) Haddi Fauzan Nurrosid**  
 > - **(2508734) Farell Arrefa Zafhir**  
 >  
-> **Tahap 3 (Final):** *Constraint Satisfaction Problems (CSP) & Local Search Dynamic Balancer*  
+> **Tahap 4 (Expanded):** *Logic, Knowledge-Based Reasoning & Automated Planning (STRIPS Supply Chain)*  
 > **Engine:** Godot Engine 4.3+ / 4.7+ (GDScript)
 
 ---
 
 ## 📌 1. Deskripsi Umum Proyek
 
-**Infernal Affairs** adalah game petualangan taktis infernal berbasis 2D yang mengintegrasikan seluruh spektrum kurikulum kecerdasan buatan (*Artificial Intelligence*) ke dalam satu ekosistem terpadu. Proyek ini memadukan empat pilar utama algoritma AI:
+**Infernal Affairs** adalah game petualangan taktis infernal berbasis 2D yang mengintegrasikan seluruh spektrum kurikulum kecerdasan buatan (*Artificial Intelligence*) ke dalam satu ekosistem terpadu. Proyek ini memadukan pilar utama algoritma AI:
 
 1. **Tahap 1 (Pathfinding & Pursuit):** Pelacakan rute terpendek dinamis (*A\* Search* dengan Manhattan Heuristic vs *Uniform-Cost Search*).
 2. **Tahap 2 (Adversarial Search):** Sistem pertarungan taktis berbasis giliran 1-on-1 (*Turn-Based Duel*) yang diotaki oleh algoritma *Minimax* dengan *Alpha-Beta Pruning* dan *Expectimax*.
 3. **Tahap 3 - Modul 5 (Constraint Satisfaction Problem - CSP):** Mesin penata variabel dunia global (*World Procedural Rules*) yang menugaskan identitas, segel, senjata, dan doktrin AI musuh bebas konflik menggunakan *Backtracking Search*, *MRV*, *LCV*, dan *AC-3 Arc Consistency*.
-4. **Tahap 3 - Modul 4 (Local Search Dynamic Balancer):** Sistem penyeimbang tingkat kesulitan adaptif secara *real-time* sebelum memasuki pertarungan menggunakan *Simulated Annealing (SA)* dan *Hill Climbing (HC)* berdasarkan metrik kondisi nyata pemain.
+4. **Tahap 3 - Modul 4 (Local Search Dynamic Balancer):** Sistem penyeimbang tingkat kesulitan adaptif secara *real-time* sebelum memasuki pertarungan menggunakan *Simulated Annealing (SA)* dan *Hill Climbing (HC)* dengan kompensasi daya pasif terbalik.
+5. **Tahap 4 - Modul 6 (Knowledge-Based Logic & Inference Engine):** Penalaran logis dengan observasi parsial (*Partial Observability*). Status segel gerbang (*Gate Seal*) disembunyikan (*Hidden [?]*) dan diungkap melalui pencapaian level (*Level 2 Trigger*), monolog kebangkitan penjaga (*Guard Awakening Event*), dan deduksi *Forward Chaining* berbasis Horn Clauses.
+6. **Tahap 4 - Modul 7 (Automated Planning - STRIPS/PDDL):** Minion bertransformasi menjadi *Autonomous Planning Agents* yang merancang sekuens aksi panen dan suplai secara berkala dari 3 Altar Wilderness menuju Guard dan Boss, mengalirkan penguatan pasif berjenjang (Tier 0 s.d Tier 2).
+
+> 📖 **Dokumentasi Khusus Tahap 4:** Lihat berkas lengkap di [PENJELASAN_IMPLEMENTASI_TAHAP_4.md](file:///c:/Users/richi/OneDrive/ドキュメント/GitHub/infernal-affairs/PENJELASAN_IMPLEMENTASI_TAHAP_4.md).
 
 ---
 
@@ -187,22 +191,28 @@ infernal-affairs/
 ├── scripts/
 │   ├── Main.gd                    # Orkestrasi alur game, encounter, dan state transition
 │   ├── core/
+│   │   ├── PlanSolver.gd          # Modul 7: Automated Planning STRIPS (State-Space Forward Search)
+│   │   ├── LogicEngine.gd         # Modul 6: Knowledge-Based Logic & Forward Chaining Inference
 │   │   ├── CSPSolver.gd           # Modul 5: Mesin CSP (MRV, LCV, AC-3)
-│   │   ├── LocalSearchBalancer.gd # Modul 4: Mesin Local Search (SA vs HC)
+│   │   ├── LocalSearchBalancer.gd # Modul 4: Mesin Local Search (SA vs HC dengan kompensasi pasif)
 │   │   ├── GameState.gd           # State global pemain & progres permainan
 │   │   ├── GridManager.gd         # Navigasi grid & kalkulasi peta
 │   │   └── MinHeap.gd             # Priority Queue untuk pencarian jalur
 │   ├── entities/
+│   │   ├── ResourceNode.gd        # Entitas Altar Elemen Wilderness (Flame, Shadow, Blood)
+│   │   ├── Minion.gd              # Logika Carrier Minion & eksekusi Automated Planning
 │   │   ├── Demon.gd               # Logika NPC Bos overworld & modular weapon
-│   │   └── Guard.gd               # Logika Penjaga gerbang & modular seal
+│   │   └── Guard.gd               # Logika Penjaga gerbang, Awakening Event & Tier Pasif
 │   ├── battle/
 │   │   ├── BattleHUD.gd           # Antarmuka pertarungan turn-based & animasi VFX
 │   │   ├── BattleManager.gd       # Wasit giliran duel & sinkronisasi aksi
 │   │   ├── BattleState.gd         # Representasi state matematis pertarungan
 │   │   └── MinimaxSolver.gd       # Modul 2: Pohon pencarian AI Minimax / Alpha-Beta
 │   └── UI/
-│       ├── PreBattleBriefingModal.gd   # Modal intel taktis pra-battle
+│       ├── AwakeningBannerModal.gd     # Modal kebangkitan penjaga saat pemain Level 2
+│       ├── PreBattleBriefingModal.gd   # Modal intel taktis pra-battle (Unrevealed vs Revealed)
 │       └── PreBattleLoadingOverlay.gd  # Visualisasi proses Local Search live
+├── TAHAP_4_LOGIC_AND_PLANNING.md  # Spesifikasi teknis & matematis komprehensif Tahap 4
 ├── project.godot                  # Konfigurasi proyek Godot 4
 └── README.md                      # Dokumentasi komprehensif proyek
 ```
