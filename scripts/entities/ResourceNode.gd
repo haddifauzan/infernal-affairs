@@ -59,22 +59,38 @@ func _setup_visuals() -> void:
 		if aura_tex:
 			aura_sprite.texture = aura_tex
 		aura_sprite.scale = Vector2(0.35, 0.20)
-		aura_sprite.modulate = Color(elem_color.r, elem_color.g, elem_color.b, 0.45)
 		aura_sprite.position = Vector2(0, 8)
 		aura_sprite.z_index = -1
 		add_child(aura_sprite)
+	aura_sprite.modulate = Color(elem_color.r, elem_color.g, elem_color.b, 0.45)
 
-	# 2. Main Crystal Structure
+	# 2. Main Altar Structure (Tahap 4)
 	if not crystal_sprite:
 		crystal_sprite = Sprite2D.new()
 		crystal_sprite.name = "CrystalSprite"
+		add_child(crystal_sprite)
+
+	var altar_tex: Texture2D = null
+	match element_type.to_lower():
+		"flame", "fire":
+			altar_tex = load("res://assets/sprites/map/obstacles/altar_ignis.png")
+		"shadow", "void", "dark":
+			altar_tex = load("res://assets/sprites/map/obstacles/altar_abyssal.png")
+		"blood", "sanguine", "earth":
+			altar_tex = load("res://assets/sprites/map/obstacles/altar_sanguine.png")
+
+	if altar_tex:
+		crystal_sprite.texture = altar_tex
+		crystal_sprite.scale = Vector2(0.20, 0.20)
+		crystal_sprite.position = Vector2(0, -12)
+		crystal_sprite.modulate = Color(1.0, 1.0, 1.0)
+	else:
 		var crystal_tex = load("res://assets/sprites/map/obstacles/crystal_large.png")
 		if crystal_tex:
 			crystal_sprite.texture = crystal_tex
 		crystal_sprite.scale = Vector2(0.42, 0.42)
 		crystal_sprite.position = Vector2(0, -10)
 		crystal_sprite.modulate = elem_color
-		add_child(crystal_sprite)
 
 	# 3. Label Badge
 	if not info_label:
@@ -82,13 +98,13 @@ func _setup_visuals() -> void:
 		info_label.name = "InfoLabel"
 		info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		info_label.add_theme_font_size_override("font_size", 8)
-		info_label.add_theme_color_override("font_color", elem_color)
 		info_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 		info_label.add_theme_constant_override("shadow_offset_x", 1)
 		info_label.add_theme_constant_override("shadow_offset_y", 1)
 		info_label.position = Vector2(-60, -42)
 		info_label.size = Vector2(120, 16)
 		add_child(info_label)
+	info_label.add_theme_color_override("font_color", elem_color)
 
 	_update_label()
 
@@ -96,7 +112,7 @@ func _get_element_color() -> Color:
 	match element_type.to_lower():
 		"shadow", "dark", "void":
 			return Color(0.75, 0.25, 1.0) # Purple
-		"blood", "earth":
+		"blood", "sanguine", "earth":
 			return Color(0.95, 0.15, 0.25) # Crimson
 		_:
 			return Color(1.0, 0.50, 0.15) # Flame Orange

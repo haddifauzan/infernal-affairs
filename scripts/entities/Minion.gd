@@ -69,6 +69,7 @@ func configure_as_carrier(altar_pos: Vector2i, elem: String, g_pos: Vector2i, b_
 	target_guard_pos = g_pos
 	target_boss_pos = b_pos
 	target_resource_node = res_node
+	_setup_animations()
 	_setup_shard_indicator()
 	request_new_plan()
 
@@ -131,13 +132,27 @@ func _update_shard_indicator() -> void:
 		return
 	if carried_element != "":
 		shard_indicator.visible = true
+		var shard_tex: Texture2D = null
 		match carried_element.to_lower():
 			"shadow", "void":
-				shard_indicator.modulate = Color(0.75, 0.25, 1.0)
-			"blood", "earth":
-				shard_indicator.modulate = Color(0.95, 0.15, 0.25)
+				shard_tex = load("res://assets/sprites/map/obstacles/shard_shadow.png")
+			"blood", "earth", "sanguine":
+				shard_tex = load("res://assets/sprites/map/obstacles/shard_blood.png")
 			_:
-				shard_indicator.modulate = Color(1.0, 0.50, 0.15)
+				shard_tex = load("res://assets/sprites/map/obstacles/shard_flame.png")
+
+		if shard_tex:
+			shard_indicator.texture = shard_tex
+			shard_indicator.scale = Vector2(0.18, 0.18)
+			shard_indicator.modulate = Color(1.0, 1.0, 1.0)
+		else:
+			match carried_element.to_lower():
+				"shadow", "void":
+					shard_indicator.modulate = Color(0.75, 0.25, 1.0)
+				"blood", "earth":
+					shard_indicator.modulate = Color(0.95, 0.15, 0.25)
+				_:
+					shard_indicator.modulate = Color(1.0, 0.50, 0.15)
 	else:
 		shard_indicator.visible = false
 
@@ -163,7 +178,10 @@ func _setup_animations() -> void:
 		frames.set_animation_loop("run_" + dir_name, true)
 		frames.set_animation_speed("run_" + dir_name, 6.0)
 
-	var idle_tex = load("res://assets/sprites/characters/minion/minion_imp.png")
+	var tex_path: String = "res://assets/sprites/characters/minion/minion_carrier.png" if is_carrier else "res://assets/sprites/characters/minion/minion_imp.png"
+	var idle_tex = load(tex_path)
+	if not idle_tex:
+		idle_tex = load("res://assets/sprites/characters/minion/minion_imp.png")
 
 	if idle_tex:
 		var dirs_order = ["down", "up", "left"]

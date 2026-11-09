@@ -55,10 +55,13 @@ var warning_sign_sprite: Sprite2D = null
 var throne_sprite: Sprite2D = null
 var pre_battle_briefing_modal: PreBattleBriefingModal = null
 
-# --- Tahap 3: Audio ---
+# --- Tahap 3 & 4: Audio ---
 var sfx_level_up: AudioStream
 var sfx_encounter_alert: AudioStream
 var sfx_gate_unlock: AudioStream
+var sfx_harvest_shard: AudioStream
+var sfx_deliver_shard: AudioStream
+var sfx_guard_awakened: AudioStream
 var bgm_boss_chamber: AudioStream
 var audio_player: AudioStreamPlayer
 var bgm_player: AudioStreamPlayer
@@ -113,6 +116,9 @@ func _ready() -> void:
 	sfx_level_up = load("res://assets/audio/sfx_level_up.wav")
 	sfx_encounter_alert = load("res://assets/audio/sfx_encounter_alert.wav")
 	sfx_gate_unlock = load("res://assets/audio/sfx_gate_unlock.wav")
+	sfx_harvest_shard = load("res://assets/audio/sfx_harvest_shard.wav")
+	sfx_deliver_shard = load("res://assets/audio/sfx_deliver_shard.wav")
+	sfx_guard_awakened = load("res://assets/audio/sfx_guard_awakened.wav")
 	bgm_boss_chamber = load("res://assets/audio/bgm_boss_chamber.ogg")
 	gate_closed_tex = load("res://assets/sprites/map/obstacles/gate_hell_closed.png")
 	gate_open_tex = load("res://assets/sprites/map/obstacles/gate_hell_open.png")
@@ -284,8 +290,8 @@ func _spawn_resource_nodes() -> void:
 		var node: ResourceNodeEntity = ResourceNodeScript.new() as ResourceNodeEntity
 		node.name = def["name"].replace(" ", "_")
 		node.process_mode = Node.PROCESS_MODE_PAUSABLE
-		add_child(node)
 		node.initialize(grid_manager, def["pos"], def["elem"], def["name"])
+		add_child(node)
 		resource_nodes.append(node)
 
 func _cleanup_resource_nodes() -> void:
@@ -454,6 +460,7 @@ func _place_map_props() -> void:
 # TAHAP 4: PLANNING & LOGIC SIGNALS & REVEAL HANDLING
 # ---------------------------------------------------------------
 func _on_minion_supply_delivered(_minion: MinionEntity, target_name: String, elem: String) -> void:
+	_play_sfx(sfx_deliver_shard)
 	if target_name == "Guard":
 		if is_instance_valid(guard_entity):
 			guard_entity.add_supply(elem)
@@ -464,6 +471,7 @@ func _on_minion_supply_delivered(_minion: MinionEntity, target_name: String, ele
 		_show_floating_alert("Minion menyuplai %s ke Demon Lord! (Senjata Diperkuat)" % elem, Color(1.0, 0.2, 0.2))
 
 func _on_minion_shard_harvested(minion: MinionEntity, elem: String) -> void:
+	_play_sfx(sfx_harvest_shard)
 	var node: ResourceNodeEntity = minion.target_resource_node
 	if not is_instance_valid(node):
 		for r in resource_nodes:
@@ -489,7 +497,7 @@ func _on_guard_awakened(dialog_text: String) -> void:
 		guard_entity.awaken_guard(dialog_text)
 
 	_shake_camera(0.6, 6.0)
-	_play_sfx(sfx_encounter_alert)
+	_play_sfx(sfx_guard_awakened)
 
 	if is_instance_valid(awakening_modal):
 		awakening_modal.queue_free()

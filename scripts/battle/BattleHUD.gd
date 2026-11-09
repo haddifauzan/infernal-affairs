@@ -147,6 +147,21 @@ var _exp_visible: bool = false
 # Action History
 var _action_history: Array[String] = []
 
+# Audio Components & Sound Design Suite (Tahap 4)
+var _audio_players: Array[AudioStreamPlayer] = []
+var _audio_idx: int = 0
+var _sfx_hit_normal: AudioStream = null
+var _sfx_hit_heavy: AudioStream = null
+var _sfx_combat_block: AudioStream = null
+var _sfx_potion_drink: AudioStream = null
+var _sfx_slash_swing: AudioStream = null
+var _sfx_heavy_charge: AudioStream = null
+var _sfx_barrier_activate: AudioStream = null
+var _sfx_void_burst: AudioStream = null
+var _sfx_earth_slam: AudioStream = null
+var _sfx_battle_victory: AudioStream = null
+var _sfx_battle_defeat: AudioStream = null
+
 # -----------------------------------------------------------------------------
 # INITIALIZATION
 # -----------------------------------------------------------------------------
@@ -163,12 +178,42 @@ func init(manager: BattleManager) -> void:
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 10
+	_setup_audio()
 	_build_ui()
 	_refresh_debug_config()
 	_update_positions()
 	get_viewport().size_changed.connect(_update_positions)
 	if is_instance_valid(_combat_stage) and not _combat_stage.resized.is_connected(_update_positions):
 		_combat_stage.resized.connect(_update_positions)
+
+func _setup_audio() -> void:
+	if _audio_players.is_empty():
+		for i in range(4):
+			var p := AudioStreamPlayer.new()
+			p.name = "CombatAudioPlayer_%d" % i
+			p.volume_db = -6.0
+			add_child(p)
+			_audio_players.append(p)
+
+	_sfx_hit_normal       = load("res://assets/audio/sfx_hit_normal.wav")
+	_sfx_hit_heavy        = load("res://assets/audio/sfx_hit_heavy.wav")
+	_sfx_combat_block     = load("res://assets/audio/sfx_combat_block.wav")
+	_sfx_potion_drink     = load("res://assets/audio/sfx_potion_drink.wav")
+	_sfx_slash_swing      = load("res://assets/audio/sfx_slash_swing.wav")
+	_sfx_heavy_charge     = load("res://assets/audio/sfx_heavy_charge.wav")
+	_sfx_barrier_activate = load("res://assets/audio/sfx_barrier_activate.wav")
+	_sfx_void_burst       = load("res://assets/audio/sfx_void_burst.wav")
+	_sfx_earth_slam       = load("res://assets/audio/sfx_earth_slam.wav")
+	_sfx_battle_victory   = load("res://assets/audio/sfx_battle_victory.wav")
+	_sfx_battle_defeat    = load("res://assets/audio/sfx_battle_defeat.wav")
+
+func _play_sfx(stream: AudioStream, vol_db: float = -6.0) -> void:
+	if stream and _audio_players.size() > 0:
+		var p = _audio_players[_audio_idx]
+		_audio_idx = (_audio_idx + 1) % _audio_players.size()
+		p.stream = stream
+		p.volume_db = vol_db
+		p.play()
 
 # -----------------------------------------------------------------------------
 # UI BUILD
@@ -945,6 +990,8 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 
 	match action:
 		MinimaxSolver.Action.ATTACK:
+			# Play swift blade swing / dash swoosh
+			_play_sfx(_sfx_slash_swing, -7.0)
 			# Dash forward -> Hit impact -> Return
 			var dash_target := base_pos + Vector2(target_dir * 170.0, 0.0)
 			var tw := create_tween()
@@ -962,6 +1009,8 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			# Windup backwards -> Fast heavy dash -> Stage shake -> Return
 			var windup_pos := base_pos - Vector2(target_dir * 30.0, 0.0)
 			var dash_target := base_pos + Vector2(target_dir * 200.0, 0.0)
+			# Play power charge / flame energy windup
+			_play_sfx(_sfx_heavy_charge, -6.0)
 			var tw := create_tween()
 			# Windup
 			tw.tween_property(attacker_node, "position", windup_pos, 0.12)
@@ -980,6 +1029,8 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			)
 
 		MinimaxSolver.Action.DEFEND:
+			# Play defensive barrier power activation hum
+			_play_sfx(_sfx_barrier_activate, -5.0)
 			# Step back into defensive stance + barrier flash
 			var brace_pos := base_pos - Vector2(target_dir * 20.0, 0.0)
 			var shield_fx := _player_shield_fx if is_player else _demon_shield_fx
@@ -988,7 +1039,7 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			tw.parallel().tween_property(shield_fx, "modulate:a", 1.0, 0.15)
 			tw.parallel().tween_property(shield_fx, "scale", Vector2(1.3, 1.3), 0.15)
 			tw.tween_callback(func():
-				_spawn_floating_text(" DEFENDING (Block 50%)", attacker_node.position + Vector2(0, -90), Color(0.2, 0.8, 1.0), false)
+				_spawn_floating_text("🛡️ DEFENDING (Block 50%)", attacker_node.position + Vector2(0, -90), Color(0.2, 0.8, 1.0), false)
 			)
 			tw.tween_property(attacker_node, "position", base_pos, 0.18)
 			tw.finished.connect(func():
@@ -997,13 +1048,15 @@ func _play_combat_animation(actor: String, action: int, result: Dictionary, new_
 			)
 
 		MinimaxSolver.Action.POTION:
+			# Play potion drink cork pop & sparkle
+			_play_sfx(_sfx_potion_drink, -4.0)
 			# Hop upwards + green sparkle burst
 			var jump_pos := base_pos - Vector2(0, 32.0)
 			var tw := create_tween()
 			tw.tween_property(attacker_node, "position", jump_pos, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			tw.tween_property(attacker_node, "position", base_pos, 0.15).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 			tw.tween_callback(func():
-				_spawn_floating_text("+%d HP " % heal, attacker_node.position + Vector2(0, -110), Color(0.2, 1.0, 0.4), false)
+				_spawn_floating_text("+%d HP 🧪" % heal, attacker_node.position + Vector2(0, -110), Color(0.2, 1.0, 0.4), false)
 				_smooth_refresh_hp(new_state)
 			)
 			tw.finished.connect(func():
@@ -1044,6 +1097,18 @@ func _trigger_hit_impact(def_node: Control, def_sprite: TextureRect, dmg: int, w
 					v_type = "flame_slash"
 			else:
 				v_type = "flame_slash"
+
+	# Audio Impact SFX: Play appropriate sound based on blocked, crit, or magic/earth archetype
+	if was_blocked:
+		_play_sfx(_sfx_combat_block, -3.0)
+	elif is_crit:
+		_play_sfx(_sfx_hit_heavy, -2.0)
+	elif v_type == "void_orb":
+		_play_sfx(_sfx_void_burst, -3.5)
+	elif v_type == "earth_bash":
+		_play_sfx(_sfx_earth_slam, -3.5)
+	else:
+		_play_sfx(_sfx_hit_normal, -4.0)
 
 	# 1. Screen Shake on every hit (Crisp normal shake, thunderous crit shake)
 	if is_crit:
@@ -1463,12 +1528,14 @@ func _on_battle_ended(winner: String, final_state: BattleState) -> void:
 	if is_instance_valid(_demon_turn_badge):  _demon_turn_badge.visible  = false
 
 	if winner == "player":
+		_play_sfx(_sfx_battle_victory, -2.0)
 		_turn_label.text = "VICTORY! %s berhasil dikalahkan!" % final_state.enemy_name
 		_turn_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.5))
 		_spawn_floating_text(" VICTORY!", _player_base_pos + Vector2(0, -120), Color(0.2, 1.0, 0.5), true)
 		if is_instance_valid(_demon_sprite):
 			create_tween().tween_property(_demon_sprite, "modulate:a", 0.0, 1.0)
 	else:
+		_play_sfx(_sfx_battle_defeat, -2.0)
 		_turn_label.text = "DEFEATED! Kamu dikalahkan oleh %s..." % final_state.enemy_name
 		_turn_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.2))
 		_spawn_floating_text(" DEFEATED!", _player_base_pos + Vector2(0, -120), Color(1.0, 0.25, 0.2), true)
