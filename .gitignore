@@ -1,4 +1,4 @@
-﻿# Godot 4+ specific ignores
+# Godot 4+ specific ignores
 .godot/
 /android/
 
@@ -6,8 +6,8 @@
 laporan_assets/
 *.tmp
 
-# Working planning files (only README.md is tracked)
-PLAN.md
+# Working planning files (only README.md is tracked, except explicit plans)
 PROMPT_ASSETS.md
 LOGIKA_DAN_ALGORITMA.md
 NASKAH_VIDEO_PENJELASAN.md
+*.pdf
