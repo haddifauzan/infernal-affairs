@@ -344,6 +344,7 @@ infernal-affairs/
 │   │   ├── PreBattleBriefingModal.gd     # Briefing Intel Segel (Unrevealed vs Revealed)
 │   │   └── PreBattleLoadingOverlay.gd    # Visualisasi Algoritma Local Search Balancer
 │   └── Main.gd                           # Pengendali Utama Overworld, Freeze Map, & Event Wiring
+├── DAFTAR_KEBUTUHAN_ASSET.md             # Panduan pengadaan aset visual & audio (Handcrafted Pixel Art)
 ├── PENJELASAN_IMPLEMENTASI_TAHAP_4.md     # Dokumen penjelasan implementasi Tahap 4 ini
 ├── PLAN_TAHAP_4.md                       # Rancangan formal MDP & Decision Under Uncertainty
 └── README.md                             # Dokumentasi utama proyek Infernal Affairs

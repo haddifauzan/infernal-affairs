@@ -23,7 +23,7 @@
 6. **Tahap 4 - Modul 7 (Automated Planning - STRIPS/PDDL):** Minion bertransformasi menjadi *Autonomous Planning Agents* yang merancang sekuens aksi panen dan suplai secara berkala dari 3 Altar Wilderness menuju Guard dan Boss, mengalirkan penguatan pasif berjenjang (Tier 0 s.d Tier 2).
 7. **Tahap 4 - Modul 8 (Decisions Under Uncertainty & MDP):** Lingkungan stokastik chokepoint lahar. Agen minion dipandu kebijakan optimal $\pi(s)$ berbasis *Maximum Expected Utility (MEU)* dan *Bellman Equation*, dengan pembaruan keyakinan dinamis via *Bayesian Updating* ($P(\text{Hazard}\mid W) = 0.50$) saat menerima observasi asap magma atau sergapan pemain.
 
-> 📖 **Dokumentasi Khusus Tahap 4:** Lihat berkas lengkap di [PENJELASAN_IMPLEMENTASI_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PENJELASAN_IMPLEMENTASI_TAHAP_4.md) dan rancangan matematis di [PLAN_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PLAN_TAHAP_4.md).
+> 📖 **Dokumentasi Khusus Tahap 4:** Lihat berkas lengkap di [PENJELASAN_IMPLEMENTASI_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PENJELASAN_IMPLEMENTASI_TAHAP_4.md), rancangan matematis di [PLAN_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PLAN_TAHAP_4.md), serta panduan kebutuhan aset pixel art di [DAFTAR_KEBUTUHAN_ASSET.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/DAFTAR_KEBUTUHAN_ASSET.md).
 
 ---
 
