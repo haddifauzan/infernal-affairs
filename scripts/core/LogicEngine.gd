@@ -74,6 +74,10 @@ func tell(fact: String) -> void:
 		known_facts[fact] = true
 		_forward_chain()
 
+## Alias for tell(fact) to assert a proposition into KB
+func assert_fact(fact: String) -> void:
+	tell(fact)
+
 ## Queries if a proposition is entailed by KB (ASK).
 func ask(query: String) -> bool:
 	return known_facts.get(query, false)

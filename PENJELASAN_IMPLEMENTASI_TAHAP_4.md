@@ -256,29 +256,97 @@ Berikut adalah langkah-langkah untuk memverifikasi fitur Tahap 4 di dalam game:
 
 ---
 
-## 📁 9. Struktur Berkas yang Terlibat di Tahap 4
+---
+
+## 🎲 10. Modul 6: Decisions Under Uncertainty & Markov Decision Processes (MDP)
+
+Sesuai materi kuliah **`09_Decision under uncertainity.pdf`**, modul ini mengubah lingkungan deterministik menjadi lingkungan stokastik di mana aksi memiliki peluang risiko dan keyakinan agen diperbarui secara dinamis via inferensi Bayes.
+
+### 10.1. File Sumber
+* [`scripts/core/MDPSolver.gd`](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/scripts/core/MDPSolver.gd)
+* [`scripts/core/StochasticHazardManager.gd`](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/scripts/core/StochasticHazardManager.gd)
+* [`scripts/entities/DroppedShard.gd`](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/scripts/entities/DroppedShard.gd)
+* [`scripts/UI/MDPDebugHUD.gd`](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/scripts/UI/MDPDebugHUD.gd)
+* [`scripts/entities/Minion.gd`](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/scripts/entities/Minion.gd)
+
+### 10.2. Formulasi Formal MDP Tuple $\langle S, A, P, R, \gamma \rangle$ & Topologi Peta Sesuai Sketsa User
+1. **State Space ($S$):**
+   * $s_0$: `Altar / Resource Nodes`:
+     * `Node 1`: *Ignis Altar* (Flame) di $(5, 21)$ — Kiri Atas
+     * `Node 2`: *Abyssal Fissure* (Shadow) di $(38, 21)$ — Kanan Atas
+     * `Node 3`: *Sanguine Well* (Blood) di $(21, 38)$ — Tengah Bawah di dalam Ground 'c'
+   * $s_1$: `Simpang_Pintu_Jembatan` (Area sebelum melangkah ke Jembatan 'd')
+   * $s_2$: `Jalur_Pintas_d` (Jembatan Horisontal 'd' di $y = 20..21$: Jembatan Kiri $x = 7..20$ & Jembatan Kanan $x = 23..36$ melintasi Danau Lava 'b' dengan retakan magma aktif)
+   * $s_3$: `Jalur_Aman_Detour` (Jalan Vertikal 'a' menyusuri ke Ground 'c' di selatan $y = 35..37$, lalu naik lurus via Jalan Utama Tengah $x = 21..22$ yang 100% aman)
+   * $s_4$: `Pos_Penjaga` (Node 4: Tempat Pengumpulan & Letak Penjaga di depan Gerbang Istana $(21, 19)$, reward $+10$)
+   * $s_5$: `Magma_Trap` (Terminal Failure, semburan lahar di tengah jembatan 'd', penalti $-20$)
+
+2. **Action Space ($A$):**
+   * $a_{\text{Pintas}}$: Melintasi Jembatan Horisontal Cepat 'd' langsung ke Pos Penjaga (hanya ~19 langkah, namun berisiko hangus tersulut magma).
+   * $a_{\text{Raya}}$: Memutar lewat jalur aman 'a' turun ke Ground 'c', lalu naik lewat Jalan Utama Tengah (~47 langkah, jauh namun 100% bebas bahaya).
+   * $a_{\text{Wait}}$: Berhenti di petak aman sebelum jembatan 'd' menunggu semburan padam.
+   * $a_{\text{Balik}}$: Berbalik mundur kembali ke Altar.
+
+3. **Fungsi Transisi Stokastik & Aturan Bayes:**
+   * **Prior:** $P(\text{Bahaya}) = 0.10$, $P(\text{Aman}) = 0.90$.
+   * **Likelihood:** $P(W \mid \text{Bahaya}) = 0.90$, $P(W \mid \text{Aman}) = 0.10$.
+   * **Posterior:**
+     $$P(\text{Bahaya} \mid W) = \frac{0.90 \times 0.10}{0.90 \times 0.10 + 0.10 \times 0.90} = \frac{0.09}{0.18} = 0.50$$
+
+4. **Persamaan Bellman & Pergeseran Kebijakan (*Policy Shift*):**
+   $$Q(s, a) = \sum_{s'} P(s' \mid s, a) \left[ R(s') + \gamma V(s') \right]$$
+   * **Kondisi Normal ($f = 0.10$):**
+     $$Q(\text{Simpang, Pintas}) = 0.90(10) + 0.10(-20) = 7.0$$
+     $$Q(\text{Simpang, Raya}) = -2 + 0.8(10) = 6.0$$
+     $$\pi^*(s_1) = \text{\textbf{PINTAS}} \quad (7.0 > 6.0)$$
+   * **Kondisi Waspada Sinyal Aktif ($f = 0.50$):**
+     $$Q(\text{Simpang, Pintas}) = 0.50(10) + 0.50(-20) = -5.0$$
+     $$Q(\text{Simpang, Raya}) = 6.0$$
+     $$\pi^*(s_1) = \text{\textbf{JALUR UTAMA}} \quad (-5.0 < 6.0) \implies \text{\textbf{Policy Shift!}}$$
+
+### 10.3. Interaksi Pemain & Begal Overworld (*Crystal Interception*)
+1. **Lava Damage Player:** Pemain yang menginjak retakan saat fase semburan aktif terkena $-12$ HP dan status *slow* 1 detik.
+2. **Begal Suplai Overworld:** Pemain yang menabrak minion kurir di jalan pintas menyebabkan kristal tumpah ke tanah sebagai item pick-up interaktif:
+   * Pemain memungut kristal: **+25 EXP, +1 Potion, dan +15 HP**.
+   * Minion kurir panik dan mundur kembali ke Altar dengan tangan kosong.
+3. **Taktik Gertakan (Bluffing):** Pemain yang berdiri di mulut lorong jalan pintas mengaktifkan sensor bahaya minion ($W = \text{true}$), memaksa keyakinan minion naik ke $0.50$ dan berbalik arah memutar ke jalur utama yang jauh.
+4. **MDP Debug HUD:** Tekan tombol **`M`** untuk menampilkan transparansi komputasi Bellman secara live, tombol simulasi bahaya instan (`Force Warning`), dan iterasi bertahap (*Step Iteration*).
+
+---
+
+## 📁 11. Struktur Berkas Lengkap Tahap 4
 
 ```text
 infernal-affairs/
+├── assets/
+│   └── sprites/
+│       ├── map/hazards/
+│       │   ├── fissure_dormant.png       # Retakan magma padam
+│       │   ├── fissure_warning.png       # Retakan berasap / warning telegraph
+│       │   └── fissure_eruption.png      # Semburan lahar aktif
+│       └── ui/effects/
+│           └── alert_hazard.png          # Badge peringatan sensor minion
 ├── scripts/
 │   ├── core/
-│   │   ├── PlanSolver.gd             # Classical STRIPS Planning (A* Plan Search)
-│   │   ├── LogicEngine.gd            # Propositional Logic KB (Horn Clauses & Forward Chaining)
-│   │   └── LocalSearchBalancer.gd    # Reverse Compensatory Balancing
+│   │   ├── MDPSolver.gd                  # Engine Bellman Equation & Value Iteration
+│   │   ├── StochasticHazardManager.gd    # Pengatur siklus retakan magma semi-stokastik
+│   │   ├── PlanSolver.gd                 # Classical STRIPS Planning (A* Plan Search)
+│   │   ├── LogicEngine.gd                # Propositional Logic KB (Horn Clauses)
+│   │   └── LocalSearchBalancer.gd        # Reverse Compensatory Balancing
 │   ├── entities/
-│   │   ├── ResourceNode.gd           # Elemental Altars & Shard Tracking (3/3, Cooldown)
-│   │   ├── Minion.gd                 # Carrier Plan Execution & Shard Indicator
-│   │   └── Guard.gd                  # Awakening State, Passive Tiers, & Dynamic Visuals
+│   │   ├── DroppedShard.gd               # Item kristal jatuh di overworld (Begal/Hazard)
+│   │   ├── Minion.gd                     # Carrier Plan, Sensor Bayes, & Policy Execution
+│   │   ├── ResourceNode.gd               # Elemental Altars & Shard Tracking (3/3, Cooldown)
+│   │   └── Guard.gd                      # Awakening State, Passive Tiers, & Dynamic Visuals
 │   ├── UI/
-│   │   ├── AwakeningBannerModal.gd   # Dialog Kebangkitan Penjaga (Level 2 Modal)
-│   │   ├── PreBattleBriefingModal.gd # Briefing Intel Segel (Unrevealed vs Revealed)
-│   │   └── PreBattleLoadingOverlay.gd# Visualisasi Algoritma Local Search Balancer
-│   ├── battle/
-│   │   ├── BattleManager.gd          # Orkestrasi Pertarungan (Process Mode Always)
-│   │   └── BattleHUD.gd              # Antarmuka Duel Turn-Based (Process Mode Always)
-│   └── Main.gd                       # Pengendali Utama Overworld, Freeze Map, & Event Wiring
-├── PENJELASAN_IMPLEMENTASI_TAHAP_4.md # Dokumen penjelasan implementasi Tahap 4 ini
-└── README.md                         # Dokumentasi utama proyek Infernal Affairs
+│   │   ├── MDPDebugHUD.gd                # Panel tabel Value Iteration & Policy Shift (M)
+│   │   ├── AwakeningBannerModal.gd       # Dialog Kebangkitan Penjaga (Level 2 Modal)
+│   │   ├── PreBattleBriefingModal.gd     # Briefing Intel Segel (Unrevealed vs Revealed)
+│   │   └── PreBattleLoadingOverlay.gd    # Visualisasi Algoritma Local Search Balancer
+│   └── Main.gd                           # Pengendali Utama Overworld, Freeze Map, & Event Wiring
+├── PENJELASAN_IMPLEMENTASI_TAHAP_4.md     # Dokumen penjelasan implementasi Tahap 4 ini
+├── PLAN_TAHAP_4.md                       # Rancangan formal MDP & Decision Under Uncertainty
+└── README.md                             # Dokumentasi utama proyek Infernal Affairs
 ```
 
 ---

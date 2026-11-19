@@ -139,70 +139,86 @@ func generate_new_map() -> void:
 	grid_updated.emit()
 
 # -------------------------------------------------------------
-# FULLY CONNECTED LAVA RIVER SYSTEM
+# FULLY CONNECTED LAVA RIVER & CHASM SYSTEM (TAHAP 4 USER SKETCH)
 # -------------------------------------------------------------
 func _carve_connected_lava_river_system() -> void:
-	# A. Main River: Spans entire map width (x = 0 .. 43) at y = 20..21
-	# Flows in from off-map West and exits off-map East!
-	for y in range(RIVER_Y_START, RIVER_Y_END + 1):
-		for x in range(width):
+	# Enforce Castle Wall Footing at y = 19 so horizontal passage is strictly via Bridge 'd'
+	for x in range(1, width - 1):
+		if x != CENTER_X and x != CENTER_X + 1:
+			# Keep platform 1 and 2 access
+			if x != 5 and x != 6 and x != 37 and x != 38:
+				grid[COURTYARD_Y][x] = TileType.OBSTACLE
+				castle_wall_positions.append(Vector2i(x, COURTYARD_Y))
+
+	# 1. Outer West Lava: x = 1 .. 4, y = 20 .. 34
+	for y in range(20, 35):
+		for x in range(1, 5):
 			grid[y][x] = TileType.LAVA
 
-	# B. West Connected Tributary:
-	# Branches seamlessly south from main river at x = 8..9 from y = 21 down to y = 34
-	for y in range(RIVER_Y_START, 35):
-		grid[y][8] = TileType.LAVA
-		grid[y][9] = TileType.LAVA
-
-	# Curves horizontally West at y = 33..34 and exits out the West map border (x = 0..9)
-	for y in [33, 34]:
-		for x in range(0, 10):
+	# 2. Inner West Lava Basin: x = 7 .. 20, y = 20 .. 34
+	# Note: Bridge 'd' at y = 20..21 will cross over this basin
+	for y in range(20, 35):
+		for x in range(7, 21):
 			grid[y][x] = TileType.LAVA
 
-	# C. East Connected Tributary:
-	# Branches seamlessly south from main river at x = 34..35 from y = 21 down to y = 34
-	for y in range(RIVER_Y_START, 35):
-		grid[y][34] = TileType.LAVA
-		grid[y][35] = TileType.LAVA
-
-	# Curves horizontally East at y = 33..34 and exits out the East map border (x = 34..43)
-	for y in [33, 34]:
-		for x in range(34, width):
+	# 3. Inner East Lava Basin: x = 23 .. 36, y = 20 .. 34
+	# Note: Bridge 'd' at y = 20..21 will cross over this basin
+	for y in range(20, 35):
+		for x in range(23, 37):
 			grid[y][x] = TileType.LAVA
+
+	# 4. Outer East Lava: x = 39 .. 42, y = 20 .. 34
+	for y in range(20, 35):
+		for x in range(39, width - 1):
+			grid[y][x] = TileType.LAVA
+
+	# 5. Clear Safe Paths 'a', Central High Road, and Ground 'c'
+	# - Left Path 'a' (Altar 1 to Ground 'c'): x = 5..6, y = 20..34
+	for y in range(20, 35):
+		for x in [5, 6]:
+			grid[y][x] = TileType.GROUND
+
+	# - Central Road (Collection Point 4 to Ground 'c'): x = 21..22, y = 19..34
+	for y in range(COURTYARD_Y, 35):
+		for x in [21, 22]:
+			grid[y][x] = TileType.GROUND
+
+	# - Right Path 'a' (Altar 2 to Ground 'c'): x = 37..38, y = 20..34
+	for y in range(20, 35):
+		for x in [37, 38]:
+			grid[y][x] = TileType.GROUND
+
+	# - Ground 'c' (Entire southern expanse): x = 1 .. 42, y = 35 .. 44
+	for y in range(35, height - 1):
+		for x in range(1, width - 1):
+			grid[y][x] = TileType.GROUND
 
 # -------------------------------------------------------------
-# 9 STONE BRIDGES OVER LAVA
+# TAHAP 4: 2 DANGEROUS SHORTCUT BRIDGES OVER LAVA (JEMBATAN 'd')
 # -------------------------------------------------------------
 func _build_all_stone_bridges() -> void:
-	# 5 Main Bridges across the Main River Chasm (y = 20..21):
-	_build_bridge(4, RIVER_Y_START, 2, 2, "vertical")
-	_build_bridge(13, RIVER_Y_START, 2, 2, "vertical")
-	_build_bridge(CENTER_X, RIVER_Y_START, 2, 2, "vertical") # Main Imperial Bridge (21..22)
-	_build_bridge(29, RIVER_Y_START, 2, 2, "vertical")
-	_build_bridge(38, RIVER_Y_START, 2, 2, "vertical")
+	# Bridge Left 'd': connects Altar 1 (x=6) to Collection Point 4 (x=21) across West Basin
+	# x = 7 .. 20 (w = 14), y = 20 .. 21 (h = 2)
+	_build_bridge(7, 20, 14, 2, "horizontal")
 
-	# 4 Bridges across the Wilderness Tributaries:
-	# - West Tributary Bridge: x = 8..9, y = 27..28
-	_build_bridge(8, 27, 2, 2, "vertical")
-	# - East Tributary Bridge: x = 34..35, y = 27..28
-	_build_bridge(34, 27, 2, 2, "vertical")
-	# - West Outgoing River Bridge: x = 4..5, y = 33..34
-	_build_bridge(4, 33, 2, 2, "vertical")
-	# - East Outgoing River Bridge: x = 38..39, y = 33..34
-	_build_bridge(38, 33, 2, 2, "vertical")
+	# Bridge Right 'd': connects Collection Point 4 (x=22) to Altar 2 (x=37) across East Basin
+	# x = 23 .. 36 (w = 14), y = 20 .. 21 (h = 2)
+	_build_bridge(23, 20, 14, 2, "horizontal")
 
-	# Ensure entrance and exit access lanes for all bridges are clean GROUND
+	# Ensure bridge entrances and exits connect cleanly to GROUND
 	for b in bridges_info:
 		var bx = b.x
 		var by = b.y
 		var bw = b.w
 		var bh = b.h
-		# North approach
-		if in_bounds(bx, by - 1):
-			for dx in range(bw): grid[by - 1][bx + dx] = TileType.GROUND
-		# South approach
-		if in_bounds(bx, by + bh):
-			for dx in range(bw): grid[by + bh][bx + dx] = TileType.GROUND
+		# West entrance
+		if in_bounds(bx - 1, by):
+			for dy in range(bh):
+				grid[by + dy][bx - 1] = TileType.GROUND
+		# East entrance
+		if in_bounds(bx + bw, by):
+			for dy in range(bh):
+				grid[by + dy][bx + bw] = TileType.GROUND
 
 func _build_bridge(start_x: int, start_y: int, w: int, h: int, orientation: String) -> void:
 	for dy in range(h):
@@ -222,32 +238,23 @@ func _build_bridge(start_x: int, start_y: int, w: int, h: int, orientation: Stri
 	})
 
 # -------------------------------------------------------------
-# CURATED LARGE LANDMARK FORMATIONS (2x2, BIG AS ORIGINAL)
+# CURATED LARGE LANDMARK FORMATIONS (GROUND 'c' & FLANKS)
 # -------------------------------------------------------------
 func _place_curated_wilderness_formations() -> void:
-	# Deliberate, balanced placement: wide 4+ tile avenues between every landmark
+	# Landmarks placed south of Resource 3 (y=38) and in ground 'c' clearings
+	# Safe corridor y=35..37 across x=5..38 is left completely unobstructed
 	var curated_2x2 = [
-		# Outer West Sector
-		Vector2i(3, 25),
-		# West-Central Sector (between West River and Center Avenue)
-		Vector2i(15, 25),
-		Vector2i(12, 31),
-		Vector2i(16, 37),
-		# East-Central Sector (between Center Avenue and East River)
-		Vector2i(27, 25),
-		Vector2i(30, 31),
-		Vector2i(26, 37),
-		# Outer East Sector
-		Vector2i(39, 25),
-		# Southern Flanks (flanking player spawn at x=21, y=42)
-		Vector2i(11, 41),
-		Vector2i(31, 41)
+		Vector2i(10, 41),
+		Vector2i(32, 41),
+		Vector2i(2, 38),
+		Vector2i(40, 38),
+		Vector2i(15, 43),
+		Vector2i(27, 43)
 	]
 
 	for pos in curated_2x2:
 		var bx = pos.x
 		var by = pos.y
-		# Block all 4 cells solid in grid
 		for dy in [0, 1]:
 			for dx in [0, 1]:
 				if in_bounds(bx + dx, by + dy) and grid[by + dy][bx + dx] == TileType.GROUND:
@@ -255,19 +262,14 @@ func _place_curated_wilderness_formations() -> void:
 		obstacles_2x2.append(pos)
 
 # -------------------------------------------------------------
-# CURATED STANDALONE PROPS (1x1 ROCKS & TREES)
+# CURATED STANDALONE PROPS (GROUND 'c' ACCENTS)
 # -------------------------------------------------------------
 func _place_curated_standalone_props() -> void:
-	# Standalone boulders & crystal accents placed in generous clearings
 	var curated_1x1 = [
-		Vector2i(5, 29),
-		Vector2i(14, 35),
-		Vector2i(29, 35),
-		Vector2i(38, 29),
-		Vector2i(18, 29),
-		Vector2i(25, 29),
-		Vector2i(13, 23),
-		Vector2i(30, 23)
+		Vector2i(8, 39),
+		Vector2i(34, 39),
+		Vector2i(17, 42),
+		Vector2i(25, 42)
 	]
 
 	for pos in curated_1x1:
@@ -275,16 +277,14 @@ func _place_curated_standalone_props() -> void:
 			grid[pos.y][pos.x] = TileType.OBSTACLE
 			obstacles_1x1.append(pos)
 
-	# Charred trees placed as atmospheric natural borders
+	# Charred trees placed as atmospheric borders
 	var curated_trees = [
-		Vector2i(2, 28),
-		Vector2i(6, 23),
-		Vector2i(17, 23),
-		Vector2i(26, 23),
-		Vector2i(37, 23),
-		Vector2i(41, 28),
-		Vector2i(14, 40),
-		Vector2i(29, 40)
+		Vector2i(2, 35),
+		Vector2i(41, 35),
+		Vector2i(6, 42),
+		Vector2i(37, 42),
+		Vector2i(12, 44),
+		Vector2i(30, 44)
 	]
 
 	for pos in curated_trees:

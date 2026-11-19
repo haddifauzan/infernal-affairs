@@ -131,78 +131,43 @@ func _draw() -> void:
 
 func _draw_connected_lava_river_system() -> void:
 	var ts = float(tile_size)
-	var w = float(grid_manager.width)
 
-	var Xc_west: float = 8.0 * ts + 32.0   # 288.0 px (Center of West vertical tributary)
-	var Xc_east: float = 34.0 * ts + 32.0  # 1120.0 px (Center of East vertical tributary)
-	var Y_main: float  = 20.0 * ts + 32.0  # 672.0 px (Center of Main horizontal river)
-	var Y_out: float   = 33.0 * ts + 32.0  # 1088.0 px (Center of Outgoing horizontal river)
+	# Tahap 4 User Sketch: 4 distinct lava zones surrounding Paths 'a', Bridges 'd', & Central Road
+	# Zone 1: Outer West Lava (x = 1 .. 4, y = 20 .. 34)
+	_draw_lava_basin_rect(Rect2(1.0 * ts, 20.0 * ts, 4.0 * ts, 15.0 * ts))
 
-	var tj_w_x: float  = Xc_west - 42.0
-	var tj_e_x: float  = Xc_east - 42.0
-	var tj_y: float    = Y_main - 26.5
+	# Zone 2: Inner West Lava Basin (x = 7 .. 20, y = 20 .. 34) - Bridge 'd' spans across y = 20..21
+	_draw_lava_basin_rect(Rect2(7.0 * ts, 20.0 * ts, 14.0 * ts, 15.0 * ts))
 
-	# A. Molten Lava Deep Underglow
-	draw_rect(Rect2(0, Y_main - 24.0, w * ts, 48.0), Color(0.88, 0.20, 0.04, 0.95), true)
-	draw_rect(Rect2(Xc_west - 24.0, Y_main, 48.0, Y_out - Y_main), Color(0.88, 0.20, 0.04, 0.95), true)
-	draw_rect(Rect2(0, Y_out - 24.0, Xc_west, 48.0), Color(0.88, 0.20, 0.04, 0.95), true)
-	draw_rect(Rect2(Xc_east - 24.0, Y_main, 48.0, Y_out - Y_main), Color(0.88, 0.20, 0.04, 0.95), true)
-	draw_rect(Rect2(Xc_east, Y_out - 24.0, (w * ts - Xc_east), 48.0), Color(0.88, 0.20, 0.04, 0.95), true)
+	# Zone 3: Inner East Lava Basin (x = 23 .. 36, y = 20 .. 34) - Bridge 'd' spans across y = 20..21
+	_draw_lava_basin_rect(Rect2(23.0 * ts, 20.0 * ts, 14.0 * ts, 15.0 * ts))
 
-	# B. Straight Tiled River Sections (drawn under junctions for seamless blending)
+	# Zone 4: Outer East Lava (x = 39 .. 42, y = 20 .. 34)
+	_draw_lava_basin_rect(Rect2(39.0 * ts, 20.0 * ts, 4.0 * ts, 15.0 * ts))
+
+func _draw_lava_basin_rect(rect: Rect2) -> void:
+	# Deep fiery underglow
+	draw_rect(rect, Color(0.92, 0.22, 0.04, 0.96), true)
+	# Molten inner core with slight pulse glow
+	var core_rect = rect.grow(-4.0)
+	draw_rect(core_rect, Color(1.0, 0.45, 0.08, 0.85), true)
+
+	# Tiled lava texture overlay
 	if river_h_tex:
-		# Main horizontal river (3 segments separated by the 2 T-junctions)
-		_tile_horizontal_lava(0, tj_w_x + 10.0, Y_main - 26.5)
-		_tile_horizontal_lava(tj_w_x + 84.0, tj_e_x + 10.0, Y_main - 26.5)
-		_tile_horizontal_lava(tj_e_x + 84.0, w * ts, Y_main - 26.5)
+		var tex_w = float(river_h_tex.get_width())
+		var tex_h = float(river_h_tex.get_height())
+		var cy = rect.position.y
+		while cy < rect.end.y - 1.0:
+			var seg_h = min(tex_h, rect.end.y - cy)
+			var cx = rect.position.x
+			while cx < rect.end.x - 1.0:
+				var seg_w = min(tex_w, rect.end.x - cx)
+				draw_texture_rect_region(river_h_tex, Rect2(cx, cy, seg_w, seg_h), Rect2(0, 0, seg_w, seg_h))
+				cx += tex_w
+			cy += tex_h
 
-		# Outgoing horizontal rivers (exiting map borders)
-		_tile_horizontal_lava(0, Xc_west - 53.0 + 10.0, Y_out - 26.5)
-		_tile_horizontal_lava(Xc_east - 26.0 + 70.0, w * ts, Y_out - 26.5)
-
-	if river_v_tex:
-		# Vertical tributaries between T-junction and corner turns
-		var y_v_start = tj_y + 75.0
-		var y_v_end   = Y_out - 38.5 + 10.0
-		_tile_vertical_lava(Xc_west - 26.5, y_v_start, y_v_end)
-		_tile_vertical_lava(Xc_east - 26.5, y_v_start, y_v_end)
-
-	# C. Dedicated Seamless T-Junctions (branching south)
-	if river_t_junction_south_tex:
-		draw_texture(river_t_junction_south_tex, Vector2(tj_w_x, tj_y))
-		draw_texture(river_t_junction_south_tex, Vector2(tj_e_x, tj_y))
-
-	# D. Dedicated Seamless Corner Turns (curving towards map border)
-	if river_turn_nw_tex:
-		draw_texture(river_turn_nw_tex, Vector2(Xc_west - 53.0, Y_out - 38.5))
-	if river_turn_ne_tex:
-		draw_texture(river_turn_ne_tex, Vector2(Xc_east - 26.0, Y_out - 38.5))
-
-func _tile_horizontal_lava(start_x: float, end_x: float, y: float) -> void:
-	if not river_h_tex or start_x >= end_x - 0.5:
-		return
-	var tex_w = float(river_h_tex.get_width())
-	var tex_h = float(river_h_tex.get_height())
-	var cx = start_x
-	while cx < end_x - 0.5:
-		var seg_w = min(tex_w, end_x - cx)
-		if seg_w <= 0.0:
-			break
-		draw_texture_rect_region(river_h_tex, Rect2(cx, y, seg_w, tex_h), Rect2(0, 0, seg_w, tex_h))
-		cx += tex_w
-
-func _tile_vertical_lava(x: float, start_y: float, end_y: float) -> void:
-	if not river_v_tex or start_y >= end_y - 0.5:
-		return
-	var tex_w = float(river_v_tex.get_width())
-	var tex_h = float(river_v_tex.get_height())
-	var cy = start_y
-	while cy < end_y - 0.5:
-		var seg_h = min(tex_h, end_y - cy)
-		if seg_h <= 0.0:
-			break
-		draw_texture_rect_region(river_v_tex, Rect2(x, cy, tex_w, seg_h), Rect2(0, 0, tex_w, seg_h))
-		cy += tex_h
+	# Dark volcanic basalt shoreline borders
+	draw_rect(rect, Color(0.12, 0.08, 0.10, 0.95), false, 2.5)
 
 func _draw_stone_bridge_deck(b: Dictionary) -> void:
 	var ts = float(tile_size)
@@ -210,23 +175,38 @@ func _draw_stone_bridge_deck(b: Dictionary) -> void:
 	var by = float(b.y) * ts
 	var bw = float(b.w) * ts
 	var bh = float(b.h) * ts
+	var orientation: String = str(b.get("orientation", "horizontal"))
 
-	# Solid carved volcanic stone deck
-	var deck_rect = Rect2(bx - 1.0, by - 2.0, bw + 2.0, bh + 4.0)
-	draw_rect(deck_rect, Color(0.18, 0.16, 0.20, 1.0), true)
-	# Stone masonry inner pavers
-	draw_rect(Rect2(bx + 2.0, by, bw - 4.0, bh), Color(0.24, 0.22, 0.27, 0.95), true)
+	if orientation == "horizontal":
+		# Solid carved volcanic stone deck
+		var deck_rect = Rect2(bx - 2.0, by - 1.0, bw + 4.0, bh + 2.0)
+		draw_rect(deck_rect, Color(0.18, 0.16, 0.20, 1.0), true)
+		# Stone masonry inner pavers
+		draw_rect(Rect2(bx, by + 2.0, bw, bh - 4.0), Color(0.24, 0.22, 0.27, 0.95), true)
 
-	# Paver mortar grid lines
-	for dy in range(1, b.h):
-		var ly = by + dy * ts
-		draw_line(Vector2(bx + 2.0, ly), Vector2(bx + bw - 2.0, ly), Color(0.12, 0.10, 0.14, 0.8), 1.5)
+		# Vertical paver mortar grid lines
+		for dx in range(1, b.w):
+			var lx = bx + dx * ts
+			draw_line(Vector2(lx, by + 2.0), Vector2(lx, by + bh - 2.0), Color(0.12, 0.10, 0.14, 0.8), 1.5)
 
-	# Stone parapets / side railings (left & right)
-	draw_line(Vector2(bx, by - 2.0), Vector2(bx, by + bh + 2.0), Color(0.42, 0.38, 0.46, 1.0), 3.5)
-	draw_line(Vector2(bx + bw, by - 2.0), Vector2(bx + bw, by + bh + 2.0), Color(0.42, 0.38, 0.46, 1.0), 3.5)
-	# Railing shadow
-	draw_line(Vector2(bx + 3.0, by), Vector2(bx + 3.0, by + bh), Color(0.08, 0.06, 0.10, 0.6), 1.5)
+		# Stone parapets / side railings (Top & Bottom)
+		draw_line(Vector2(bx - 2.0, by), Vector2(bx + bw + 2.0, by), Color(0.46, 0.42, 0.50, 1.0), 3.5)
+		draw_line(Vector2(bx - 2.0, by + bh), Vector2(bx + bw + 2.0, by + bh), Color(0.46, 0.42, 0.50, 1.0), 3.5)
+		# Railing shadow
+		draw_line(Vector2(bx, by + 3.0), Vector2(bx + bw, by + 3.0), Color(0.08, 0.06, 0.10, 0.6), 1.5)
+	else:
+		# Vertical bridge deck
+		var deck_rect = Rect2(bx - 1.0, by - 2.0, bw + 2.0, bh + 4.0)
+		draw_rect(deck_rect, Color(0.18, 0.16, 0.20, 1.0), true)
+		draw_rect(Rect2(bx + 2.0, by, bw - 4.0, bh), Color(0.24, 0.22, 0.27, 0.95), true)
+
+		for dy in range(1, b.h):
+			var ly = by + dy * ts
+			draw_line(Vector2(bx + 2.0, ly), Vector2(bx + bw - 2.0, ly), Color(0.12, 0.10, 0.14, 0.8), 1.5)
+
+		draw_line(Vector2(bx, by - 2.0), Vector2(bx, by + bh + 2.0), Color(0.42, 0.38, 0.46, 1.0), 3.5)
+		draw_line(Vector2(bx + bw, by - 2.0), Vector2(bx + bw, by + bh + 2.0), Color(0.42, 0.38, 0.46, 1.0), 3.5)
+		draw_line(Vector2(bx + 3.0, by), Vector2(bx + 3.0, by + bh), Color(0.08, 0.06, 0.10, 0.6), 1.5)
 
 func _spawn_visual_elements() -> void:
 	if not grid_manager:

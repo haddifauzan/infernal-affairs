@@ -7,6 +7,9 @@ extends Node2D
 signal defeated(minion: MinionEntity)
 signal supply_delivered(minion: MinionEntity, target_name: String, elem: String)
 signal shard_harvested(minion: MinionEntity, elem: String)
+signal hazard_scorched(minion: MinionEntity, elem: String)
+signal intercepted_by_player(minion: MinionEntity, elem: String)
+signal mdp_policy_shifted(minion: MinionEntity, action: int, belief: float)
 
 var grid_manager: GridManager
 var player: PlayerEntity = null
@@ -19,7 +22,7 @@ var grid_pos: Vector2i = Vector2i.ZERO
 var target_world_pos: Vector2 = Vector2.ZERO
 var patrol_target: Vector2i = Vector2i.ZERO
 
-# --- Tahap 4: Automated Planning & Carrier States ---
+# --- Tahap 4: Automated Planning, MDP Policy, & Carrier States ---
 var is_carrier: bool = false
 var carried_element: String = ""
 var plan_solver: PlanSolver = PlanSolver.new()
@@ -31,6 +34,13 @@ var target_boss_pos: Vector2i  = Vector2i(21, 4)
 var target_element: String = "Flame"
 var target_resource_node: ResourceNodeEntity = null
 var shard_indicator: Sprite2D = null
+
+# --- Tahap 4: MDP & Bayesian Decision Variables ---
+var hazard_manager: StochasticHazardManager = null
+var hazard_belief: float = 0.10
+var current_mdp_action: int = MDPSolver.Action.PINTAS
+var alert_badge: Sprite2D = null
+var wait_timer: float = 0.0
 
 var move_speed: float = 140.0
 var chase_interval: float = 0.45       # AI pathfinding update tick
@@ -71,6 +81,7 @@ func configure_as_carrier(altar_pos: Vector2i, elem: String, g_pos: Vector2i, b_
 	target_resource_node = res_node
 	_setup_animations()
 	_setup_shard_indicator()
+	_setup_alert_badge()
 	request_new_plan()
 
 func _try_harvest(elem: String) -> bool:
@@ -156,6 +167,58 @@ func _update_shard_indicator() -> void:
 	else:
 		shard_indicator.visible = false
 
+func _setup_alert_badge() -> void:
+	if not alert_badge:
+		alert_badge = Sprite2D.new()
+		alert_badge.name = "AlertBadge"
+		var badge_tex = load("res://assets/sprites/ui/effects/alert_hazard.png")
+		if badge_tex:
+			alert_badge.texture = badge_tex
+		alert_badge.scale = Vector2(0.5, 0.5)
+		alert_badge.position = Vector2(12, -22)
+		alert_badge.z_index = 4
+		alert_badge.visible = false
+		add_child(alert_badge)
+
+func _update_alert_badge() -> void:
+	if not alert_badge:
+		return
+	if hazard_belief >= 0.40:
+		alert_badge.visible = true
+		alert_badge.scale = Vector2(0.55, 0.55) + Vector2(sin(pulse_time * 6.0) * 0.08, sin(pulse_time * 6.0) * 0.08)
+	else:
+		alert_badge.visible = false
+
+func set_hazard_manager(hm: StochasticHazardManager) -> void:
+	hazard_manager = hm
+	if hazard_manager:
+		hazard_manager.register_minion(self)
+
+func on_hazard_scorched() -> void:
+	if carried_element != "":
+		var dropped = carried_element
+		carried_element = ""
+		_update_shard_indicator()
+		_update_alert_badge()
+		hazard_scorched.emit(self, dropped)
+		# Retreat immediately off the burning bridge to safe land
+		if grid_pos.x <= 21:
+			grid_pos = Vector2i(6, 21)
+		else:
+			grid_pos = Vector2i(37, 21)
+		if grid_manager:
+			target_world_pos = grid_manager.grid_to_world(grid_pos)
+		request_new_plan()
+
+func on_intercepted_by_player() -> void:
+	if carried_element != "":
+		var dropped = carried_element
+		carried_element = ""
+		_update_shard_indicator()
+		_update_alert_badge()
+		intercepted_by_player.emit(self, dropped)
+		request_new_plan()
+
 func set_algorithm(algo: String) -> void:
 	current_algorithm = algo.to_lower()
 
@@ -163,6 +226,7 @@ func _ready() -> void:
 	_setup_animations()
 	_setup_aura()
 	_setup_shard_indicator()
+	_setup_alert_badge()
 
 func _setup_animations() -> void:
 	if not anim_sprite:
@@ -226,6 +290,9 @@ func _physics_process(delta: float) -> void:
 	if is_defeated:
 		return
 
+	if wait_timer > 0.0:
+		wait_timer -= delta
+
 	# Pixel-perfect Dynamic Y-Sorting based on minion feet
 	z_index = int(position.y + 10.0)
 
@@ -242,6 +309,8 @@ func _physics_process(delta: float) -> void:
 	# Shard indicator floating animation
 	if is_instance_valid(shard_indicator) and shard_indicator.visible:
 		shard_indicator.position.y = -22.0 + sin(pulse_time * 2.5) * 2.0
+
+	_update_alert_badge()
 
 	if not is_active or not grid_manager:
 		return
@@ -277,6 +346,9 @@ func _pick_patrol_target() -> void:
 			return
 
 func _move_toward_target() -> void:
+	if wait_timer > 0.0:
+		return
+
 	var target = patrol_target
 	if is_chasing and player:
 		target = player.grid_pos
@@ -287,6 +359,55 @@ func _move_toward_target() -> void:
 		match step_type:
 			PlanSolver.ActionType.MOVE:
 				target = step.get("target_pos", grid_pos)
+
+				# --- Tahap 4: Markov Decision Process (MDP) Navigation in Wilderness Chokepoint ---
+				if carried_element != "":
+					# If minion originated from West or East wings, it has a choice: Jembatan Pintas 'd' vs Jalur Aman 'a' -> 'c'
+					var is_left_wing: bool = (spawn_origin.x <= 15 or target_altar_pos.x <= 15)
+					var is_right_wing: bool = (spawn_origin.x >= 28 or target_altar_pos.x >= 28)
+
+					if (is_left_wing or is_right_wing) and grid_pos.y <= 36:
+						var signal_active = false
+						if hazard_manager:
+							signal_active = hazard_manager.is_hazard_signal_active(grid_pos)
+
+						var prev_act = current_mdp_action
+						hazard_belief = MDPSolver.update_bayesian_belief(signal_active)
+						current_mdp_action = MDPSolver.get_optimal_action(MDPSolver.State.SIMPANG_LEMBAH, hazard_belief)
+
+						if prev_act != current_mdp_action:
+							mdp_policy_shifted.emit(self, current_mdp_action, hazard_belief)
+						_update_alert_badge()
+
+						match current_mdp_action:
+							MDPSolver.Action.WAIT:
+								# If at the threshold right before bridge 'd', pause for safe window
+								if (is_left_wing and grid_pos.x in [6, 7] and grid_pos.y in [20, 21]) or (is_right_wing and grid_pos.x in [36, 37] and grid_pos.y in [20, 21]):
+									wait_timer = 0.8
+									return
+							MDPSolver.Action.BALIK:
+								# Retreat back towards Altar
+								target = target_altar_pos
+							MDPSolver.Action.RAYA:
+								# Safe Detour via Path 'a' down to Ground 'c' (y=36) and up Central Road
+								if is_left_wing:
+									if grid_pos.y < 35:
+										target = Vector2i(5, 36)
+									elif grid_pos.x < 20:
+										target = Vector2i(21, 36)
+									else:
+										target = target_guard_pos
+								elif is_right_wing:
+									if grid_pos.y < 35:
+										target = Vector2i(38, 36)
+									elif grid_pos.x > 22:
+										target = Vector2i(21, 36)
+									else:
+										target = target_guard_pos
+							MDPSolver.Action.PINTAS:
+								# Fast direct shortcut across Left or Right Bridge 'd'
+								target = target_guard_pos
+
 				# Check if arrived at target or directly adjacent
 				var dist: int = abs(grid_pos.x - target.x) + abs(grid_pos.y - target.y)
 				if dist <= 1:
@@ -302,6 +423,7 @@ func _move_toward_target() -> void:
 							supply_delivered.emit(self, str(next_step.get("target_entity", "Guard")), carried_element)
 							carried_element = ""
 							_update_shard_indicator()
+							_update_alert_badge()
 							request_new_plan()
 							return
 			PlanSolver.ActionType.HARVEST:
@@ -312,6 +434,7 @@ func _move_toward_target() -> void:
 				supply_delivered.emit(self, str(step.get("target_entity", "Guard")), carried_element)
 				carried_element = ""
 				_update_shard_indicator()
+				_update_alert_badge()
 				request_new_plan()
 				return
 

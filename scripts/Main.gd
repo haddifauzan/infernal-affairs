@@ -33,10 +33,19 @@ var csp_solver: CSPSolver = CSPSolver.new()
 var csp_result: Dictionary = {}
 
 # --- Tahap 4: Logic & Automated Planning Modules ---
+const StochasticHazardManagerScript = preload("res://scripts/core/StochasticHazardManager.gd")
+const MDPDebugHUDScript = preload("res://scripts/UI/MDPDebugHUD.gd")
+const DroppedShardScript = preload("res://scripts/entities/DroppedShard.gd")
+
 var logic_engine: LogicEngine = LogicEngine.new()
 var plan_solver: PlanSolver = PlanSolver.new()
 var resource_nodes: Array[ResourceNodeEntity] = []
 var awakening_modal: AwakeningBannerModal = null
+
+# --- Tahap 4: Decisions Under Uncertainty & MDP ---
+var hazard_manager: StochasticHazardManager = null
+var mdp_debug_hud: MDPDebugHUD = null
+var active_dropped_shards: Array[DroppedShardEntity] = []
 
 # --- Tahap 3: NPC Entities ---
 var minion_scene: PackedScene = preload("res://scenes/Minion.tscn")
@@ -171,6 +180,9 @@ func _ready() -> void:
 	# Build debug HUD (Bottom Right, F3)
 	_build_debug_hud()
 
+	# Build Tahap 4 MDP & Bayesian Transparency HUD (Top Right, M)
+	_build_mdp_hud()
+
 	# Connect window resize to dynamically maintain HUD bottom anchoring
 	if get_viewport():
 		get_viewport().size_changed.connect(_reposition_hud_panels)
@@ -255,6 +267,9 @@ func start_new_game() -> void:
 	# Spawn Guard at the gate courtyard (Zone 2)
 	_spawn_guard()
 
+	# Spawn Stochastic Magma Hazards in Chokepoint (Tahap 4)
+	_setup_stochastic_hazard_manager()
+
 	# Spawn Minions with Player reference, active algorithm, and Automated Carrier Plans (Tahap 4)
 	_spawn_minions()
 
@@ -271,7 +286,7 @@ func start_new_game() -> void:
 	_update_algo_label()
 	_update_player_stats_hud()
 	_update_debug_hud()
-	info_label.text = "Infernal Affairs - Tahap 4 (Logic & Planning)  |  [L] Cheat Lv-Up  |  [K] Auto-Lv  |  [Tab] A*/UCS  |  [F3] Debug  |  [R] Reset"
+	info_label.text = "Infernal Affairs - Tahap 4 (Logic, Planning & MDP)  |  [M] MDP HUD  |  [L] Lv-Up  |  [Tab] A*/UCS  |  [F3] Debug  |  [R] Reset"
 
 func _on_grid_updated() -> void:
 	arena_map.build_map(grid_manager)
@@ -282,9 +297,9 @@ func _on_grid_updated() -> void:
 func _spawn_resource_nodes() -> void:
 	_cleanup_resource_nodes()
 	var altars_def = [
-		{"pos": Vector2i(8, 38), "elem": "Flame", "name": "Ignis Altar"},
-		{"pos": Vector2i(35, 38), "elem": "Shadow", "name": "Abyssal Fissure"},
-		{"pos": Vector2i(21, 32), "elem": "Blood", "name": "Sanguine Well"}
+		{"pos": Vector2i(5, 21), "elem": "Flame", "name": "Ignis Altar"},
+		{"pos": Vector2i(38, 21), "elem": "Shadow", "name": "Abyssal Fissure"},
+		{"pos": Vector2i(21, 38), "elem": "Blood", "name": "Sanguine Well"}
 	]
 	for def in altars_def:
 		var node: ResourceNodeEntity = ResourceNodeScript.new() as ResourceNodeEntity
@@ -302,9 +317,9 @@ func _cleanup_resource_nodes() -> void:
 
 func _spawn_minions() -> void:
 	var carrier_altars: Array[Vector2i] = [
-		Vector2i(8, 38),
-		Vector2i(35, 38),
-		Vector2i(21, 32)
+		Vector2i(5, 21),
+		Vector2i(38, 21),
+		Vector2i(21, 38)
 	]
 	var carrier_elems: Array[String] = ["Flame", "Shadow", "Blood"]
 
@@ -331,6 +346,13 @@ func _spawn_minions() -> void:
 			minion.supply_delivered.connect(_on_minion_supply_delivered)
 			minion.shard_harvested.connect(_on_minion_shard_harvested)
 
+		# Tahap 4: Register with Stochastic Hazard Manager & Connect MDP Signals
+		if is_instance_valid(hazard_manager):
+			minion.set_hazard_manager(hazard_manager)
+		minion.hazard_scorched.connect(_on_minion_hazard_scorched)
+		minion.intercepted_by_player.connect(_on_minion_intercepted_by_player)
+		minion.mdp_policy_shifted.connect(_on_minion_policy_shifted)
+
 		minion.defeated.connect(_on_minion_defeated)
 		spawned_minions.append(minion)
 
@@ -354,6 +376,10 @@ func _cleanup_npcs() -> void:
 	if is_instance_valid(guard_entity):
 		guard_entity.queue_free()
 		guard_entity = null
+	for s in active_dropped_shards:
+		if is_instance_valid(s):
+			s.queue_free()
+	active_dropped_shards.clear()
 
 func _cleanup_map_props() -> void:
 	if is_instance_valid(gate_sprite):
@@ -492,6 +518,96 @@ func _on_minion_defeated(minion: MinionEntity) -> void:
 	if minion.carried_element != "":
 		_show_floating_alert("Minion dijatuhkan! Esensi %s berhasil disabotase." % minion.carried_element, Color(0.2, 1.0, 0.6))
 
+# ---------------------------------------------------------------
+# TAHAP 4: MDP & STOCHASTIC HAZARD EVENT HANDLERS
+# ---------------------------------------------------------------
+func _setup_stochastic_hazard_manager() -> void:
+	if is_instance_valid(hazard_manager):
+		hazard_manager.queue_free()
+	hazard_manager = StochasticHazardManagerScript.new()
+	hazard_manager.name = "StochasticHazardManager"
+	hazard_manager.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(hazard_manager)
+	hazard_manager.initialize(grid_manager, player)
+	hazard_manager.hazard_phase_changed.connect(_on_hazard_phase_changed)
+	hazard_manager.player_hazard_damaged.connect(_on_player_hazard_damaged)
+
+func _on_hazard_phase_changed(phase: int) -> void:
+	if is_instance_valid(mdp_debug_hud) and is_instance_valid(hazard_manager):
+		var signal_active: bool = hazard_manager.is_hazard_signal_active()
+		var p_f: float = 0.50 if signal_active else 0.10
+		mdp_debug_hud.update_mdp_display(p_f, signal_active)
+
+func _on_player_hazard_damaged(damage: int, _tile: Vector2i) -> void:
+	_shake_camera(0.3, 4.0)
+	_show_floating_alert("LAVA TERBAKAR! -%d HP (Slow 1s)" % damage, Color(1.0, 0.25, 0.15))
+	_update_player_stats_hud()
+
+func _on_minion_hazard_scorched(minion: MinionEntity, elem: String) -> void:
+	_shake_camera(0.3, 3.5)
+	_spawn_dropped_shard(minion.grid_pos, elem)
+	_show_floating_alert("⚠ Minion Terbakar Magma Trap! Shard %s Tumpah! (-20)" % elem, Color(1.0, 0.4, 0.1))
+	if is_instance_valid(logic_engine):
+		logic_engine.tell("MinionSabotaged_" + elem)
+
+func _handle_carrier_intercept(minion: MinionEntity) -> void:
+	var elem: String = minion.carried_element
+	minion.on_intercepted_by_player()
+	_spawn_dropped_shard(minion.grid_pos, elem)
+	_shake_camera(0.4, 4.5)
+	_play_sfx(sfx_encounter_alert)
+	_show_floating_alert("✦ BEGAL BERHASIL! Suplai %s dirampas dari Minion Kurir! ✦" % elem, Color(1.0, 0.85, 0.2))
+	if is_instance_valid(logic_engine):
+		logic_engine.tell("MinionSabotaged_" + elem)
+
+func _on_minion_intercepted_by_player(_minion: MinionEntity, _elem: String) -> void:
+	pass
+
+func _on_minion_policy_shifted(minion: MinionEntity, action: int, belief: float) -> void:
+	var act_name = "PINTAS (Shortcut)" if action == MDPSolver.Action.PINTAS else "JALUR UTAMA (Detour)"
+	if action == MDPSolver.Action.WAIT:
+		act_name = "WAIT (Tunggu Padam)"
+	elif action == MDPSolver.Action.BALIK:
+		act_name = "BALIK (Retreat)"
+
+	if belief >= 0.40:
+		_show_floating_alert("⚠ SENSOR BAHAYA AKTIF! Minion %s Policy -> %s (P(H|W)=%.2f)" % [minion.name, act_name, belief], Color(1.0, 0.65, 0.2))
+
+	if is_instance_valid(mdp_debug_hud):
+		mdp_debug_hud.update_mdp_display(belief, belief >= 0.40)
+
+func _spawn_dropped_shard(pos: Vector2i, elem: String) -> void:
+	var shard = DroppedShardScript.new() as DroppedShardEntity
+	shard.name = "DroppedShard_%s_%d_%d" % [elem, pos.x, pos.y]
+	shard.process_mode = Node.PROCESS_MODE_PAUSABLE
+	shard.initialize(grid_manager, pos, elem)
+	shard.collected.connect(_on_dropped_shard_collected)
+	add_child(shard)
+	active_dropped_shards.append(shard)
+
+func _on_dropped_shard_collected(shard: DroppedShardEntity, elem: String) -> void:
+	active_dropped_shards.erase(shard)
+	GameState.add_exp(25)
+	GameState.potions += 1
+	GameState.heal_player(15)
+	_play_sfx(sfx_deliver_shard)
+	_show_floating_alert("✦ SHARD %s DIAMBIL! (+25 EXP, +1 Potion, +15 HP) ✦" % elem.to_upper(), Color(0.3, 1.0, 0.5))
+	_update_player_stats_hud()
+
+func _build_mdp_hud() -> void:
+	if is_instance_valid(mdp_debug_hud):
+		mdp_debug_hud.queue_free()
+	mdp_debug_hud = MDPDebugHUDScript.new() as MDPDebugHUD
+	mdp_debug_hud.name = "MDPDebugHUD"
+	mdp_debug_hud.process_mode = Node.PROCESS_MODE_ALWAYS
+	mdp_debug_hud.force_warning_toggled.connect(func(active: bool):
+		if is_instance_valid(hazard_manager):
+			hazard_manager.force_warning_active = active
+			_on_hazard_phase_changed(hazard_manager.current_phase)
+	)
+	$CanvasLayer.add_child(mdp_debug_hud)
+	_reposition_hud_panels()
+
 func _on_guard_awakened(dialog_text: String) -> void:
 	if is_instance_valid(guard_entity):
 		guard_entity.awaken_guard(dialog_text)
@@ -583,12 +699,22 @@ func _on_player_moved_tahap3(new_pos: Vector2i) -> void:
 	if is_in_battle or is_game_over or is_game_paused:
 		return
 
+	# Tahap 4: Check collecting dropped crystal shards
+	for shard in active_dropped_shards:
+		if is_instance_valid(shard) and not shard.is_collected and shard.grid_pos == new_pos:
+			shard.collect()
+			break
+
 	# Proximity check with Minions (Wilderness)
 	for minion in spawned_minions:
 		if is_instance_valid(minion) and not minion.is_defeated:
 			if _grid_distance(new_pos, minion.grid_pos) <= 1:
-				_trigger_encounter("minion", minion)
-				return
+				if minion.is_carrier and minion.carried_element != "":
+					_handle_carrier_intercept(minion)
+					return
+				else:
+					_trigger_encounter("minion", minion)
+					return
 
 	# Proximity check with Guard (Gate Courtyard)
 	if is_instance_valid(guard_entity) and not guard_entity.is_defeated:
@@ -967,6 +1093,10 @@ func _dismiss_all_minions() -> void:
 			tw.tween_property(m, "modulate:a", 0.0, 0.8)
 			tw.tween_callback(m.queue_free)
 	spawned_minions.clear()
+	for s in active_dropped_shards:
+		if is_instance_valid(s):
+			s.queue_free()
+	active_dropped_shards.clear()
 
 func _on_gate_unlocked() -> void:
 	_dismiss_all_minions()
@@ -1314,6 +1444,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				debug_visible = not debug_visible
 				if debug_panel:
 					debug_panel.visible = debug_visible
+			KEY_M:
+				if is_instance_valid(mdp_debug_hud):
+					mdp_debug_hud.visible = not mdp_debug_hud.visible
 
 func _toggle_algorithm() -> void:
 	_set_algorithm("ucs" if current_algorithm == "astar" else "astar")
@@ -1555,6 +1688,13 @@ func _reposition_hud_panels() -> void:
 		debug_panel.custom_minimum_size = Vector2(dbg_w, dbg_h)
 		debug_panel.size = Vector2(dbg_w, dbg_h)
 		debug_panel.position = Vector2(maxf(16.0, vp_size.x - dbg_w - 16.0), maxf(16.0, vp_size.y - dbg_h - 16.0))
+
+	if is_instance_valid(mdp_debug_hud):
+		var mdp_w: float = 460.0
+		var mdp_h: float = 360.0
+		mdp_debug_hud.custom_minimum_size = Vector2(mdp_w, mdp_h)
+		mdp_debug_hud.size = Vector2(mdp_w, mdp_h)
+		mdp_debug_hud.position = Vector2(maxf(16.0, vp_size.x - mdp_w - 16.0), 65.0)
 
 func _update_player_stats_hud() -> void:
 	if not is_instance_valid(player_hud_panel):
@@ -1960,13 +2100,13 @@ func _build_pause_modal() -> void:
 	hdr.add_child(title_vbox)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "GAME PAUSED  |  BRIEFING ARSITEKTUR & KONSEP AI (TUBES TAHAP 3)"
+	title_lbl.text = "GAME PAUSED  |  BRIEFING ARSITEKTUR & KONSEP AI (TUBES TAHAP 4)"
 	title_lbl.add_theme_font_size_override("font_size", 13)
 	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.80, 0.2))
 	title_vbox.add_child(title_lbl)
 
 	var subtitle_lbl := Label.new()
-	subtitle_lbl.text = "Infernal Affairs: Integrasi Pathfinding, Adversarial Minimax, CSP, & Local Search"
+	subtitle_lbl.text = "Infernal Affairs: Integrasi Search, Minimax, CSP, Local Search, Planning, & MDP Uncertainty"
 	subtitle_lbl.add_theme_font_size_override("font_size", 10)
 	subtitle_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.85))
 	title_vbox.add_child(subtitle_lbl)
@@ -2071,15 +2211,15 @@ func _build_pause_modal() -> void:
 	)
 	cards_row.add_child(c3)
 
-	# Card 4: Tahap 4 Logic & Automated Planning
+	# Card 4: Tahap 4 Logic, Planning & MDP
 	var c4 := _make_concept_card(
-		"TAHAP 4: LOGIC & PLANNING",
-		"STRIPS & Forward Chaining KB",
+		"TAHAP 4: PLANNING & MDP",
+		"STRIPS, Bayes & Bellman MDP",
 		Color(0.25, 0.85, 1.0),
-		"[color=#64dfdf][b]• Automated Planning (STRIPS):[/b][/color] Minion merencanakan rute panen altar & suplai ke Guard/Boss.\n" +
-		"[color=#64dfdf][b]• 3 Altar Wilderness:[/b][/color] Altar Api, Bayangan, & Darah menyuplai penguatan pasif Tier 0 s.d T2.\n" +
-		"[color=#64dfdf][b]• Guard Awakening:[/b][/color] Segel tersembunyi hingga Level 2 memicu kebangkitan penjaga gerbang.\n" +
-		"[color=#64dfdf][b]• KB Forward Chaining:[/b][/color] Deduksi esensi musuh & balancing adaptif terbalik pada Local Search."
+		"[color=#64dfdf][b]• Classical Planning (STRIPS):[/b][/color] Minion merencanakan aksi MOVE, HARVEST, & DELIVER.\n" +
+		"[color=#64dfdf][b]• MDP & Bellman Equation:[/b][/color] Navigasi stokastik chokepoint lahar (Pintas vs Raya vs Wait).\n" +
+		"[color=#64dfdf][b]• Bayesian Sensor Updating:[/b][/color] Observasi asap/pemain mengubah keyakinan bahaya 0.10 -> 0.50.\n" +
+		"[color=#64dfdf][b]• Tekan [M]:[/b][/color] Tampilkan tabel Value Iteration & tombol simulasi interaktif."
 	)
 	cards_row.add_child(c4)
 
@@ -2095,7 +2235,7 @@ func _build_pause_modal() -> void:
 	vbox.add_child(sc_panel)
 
 	var sc_lbl := Label.new()
-	sc_lbl.text = "Shortcut Presenter:  [P / ESC] Pause/Resume  |  [TAB] A*/UCS  |  [F3] Debug HUD  |  [L] Instant Level Up  |  [K] Auto-Level  |  [R] Reset"
+	sc_lbl.text = "Shortcut Presenter:  [P / ESC] Pause/Resume  |  [M] MDP HUD  |  [TAB] A*/UCS  |  [F3] Debug HUD  |  [L] Lv-Up  |  [K] Auto-Lv  |  [R] Reset"
 	sc_lbl.add_theme_font_size_override("font_size", 9)
 	sc_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
 	sc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

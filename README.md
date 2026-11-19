@@ -6,7 +6,7 @@
 > - **(2507609) Haddi Fauzan Nurrosid**  
 > - **(2508734) Farell Arrefa Zafhir**  
 >  
-> **Tahap 4 (Expanded):** *Logic, Knowledge-Based Reasoning & Automated Planning (STRIPS Supply Chain)*  
+> **Tahap 4 (Expanded):** *Logic, Knowledge-Based Reasoning, Automated Planning (STRIPS Supply Chain), & MDP Decisions Under Uncertainty*  
 > **Engine:** Godot Engine 4.3+ / 4.7+ (GDScript)
 
 ---
@@ -21,8 +21,9 @@
 4. **Tahap 3 - Modul 4 (Local Search Dynamic Balancer):** Sistem penyeimbang tingkat kesulitan adaptif secara *real-time* sebelum memasuki pertarungan menggunakan *Simulated Annealing (SA)* dan *Hill Climbing (HC)* dengan kompensasi daya pasif terbalik.
 5. **Tahap 4 - Modul 6 (Knowledge-Based Logic & Inference Engine):** Penalaran logis dengan observasi parsial (*Partial Observability*). Status segel gerbang (*Gate Seal*) disembunyikan (*Hidden [?]*) dan diungkap melalui pencapaian level (*Level 2 Trigger*), monolog kebangkitan penjaga (*Guard Awakening Event*), dan deduksi *Forward Chaining* berbasis Horn Clauses.
 6. **Tahap 4 - Modul 7 (Automated Planning - STRIPS/PDDL):** Minion bertransformasi menjadi *Autonomous Planning Agents* yang merancang sekuens aksi panen dan suplai secara berkala dari 3 Altar Wilderness menuju Guard dan Boss, mengalirkan penguatan pasif berjenjang (Tier 0 s.d Tier 2).
+7. **Tahap 4 - Modul 8 (Decisions Under Uncertainty & MDP):** Lingkungan stokastik chokepoint lahar. Agen minion dipandu kebijakan optimal $\pi(s)$ berbasis *Maximum Expected Utility (MEU)* dan *Bellman Equation*, dengan pembaruan keyakinan dinamis via *Bayesian Updating* ($P(\text{Hazard}\mid W) = 0.50$) saat menerima observasi asap magma atau sergapan pemain.
 
-> 📖 **Dokumentasi Khusus Tahap 4:** Lihat berkas lengkap di [PENJELASAN_IMPLEMENTASI_TAHAP_4.md](file:///c:/Users/richi/OneDrive/ドキュメント/GitHub/infernal-affairs/PENJELASAN_IMPLEMENTASI_TAHAP_4.md).
+> 📖 **Dokumentasi Khusus Tahap 4:** Lihat berkas lengkap di [PENJELASAN_IMPLEMENTASI_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PENJELASAN_IMPLEMENTASI_TAHAP_4.md) dan rancangan matematis di [PLAN_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PLAN_TAHAP_4.md).
 
 ---
 
@@ -223,9 +224,13 @@ infernal-affairs/
 
 ### Overworld (Eksplorasi):
 - `W / A / S / D` atau `Tombol Panah`: Bergerak di peta labirin.
+- `M`: Membuka / Menutup **Tahap 4 MDP & Bayesian Value Iteration HUD**.
 - `F3`: Membuka / Menutup **Debug HUD & CSP Inspector**.
 - `P` / `ESC`: Mengaktifkan **Game Pause & Konsep AI Briefing**.
-- `L`: Naik level instan (*Debug Level Up*).
+- `TAB`: Beralih algoritma pathfinding (**A\*** $\leftrightarrow$ **UCS**).
+- `L` / `C`: Naik level instan (*Debug Level Up*).
+- `K`: Mengaktifkan / Menonaktifkan auto-level sesuai syarat gerbang.
+- `R`: Mengulang sesi overworld dari awal (*Restart Game*).
 
 ### Modal Briefing Pra-Battle:
 - `Enter` / `X`: Melanjutkan ke persiapan pertarungan (*Pre-Battle Balancer*).
