@@ -77,6 +77,23 @@ func award_minion_exp() -> bool:
 
 	return leveled_up
 
+## Add EXP directly (e.g. from collecting dropped elemental shards). Returns true if leveled up.
+func add_exp(amount: int) -> bool:
+	var leveled_up := false
+	exp += amount
+	exp_changed.emit(exp)
+
+	if exp >= EXP_PER_LEVEL and level < MAX_LEVEL:
+		_level_up()
+		leveled_up = true
+
+	return leveled_up
+
+## Heal the player directly (e.g. from collecting restorative shards or shrines).
+func heal_player(amount: int) -> void:
+	hp = mini(hp + amount, max_hp)
+	hp_changed.emit(hp)
+
 ## Level up from defeating the guard. Grants castle key.
 func award_guard_victory() -> void:
 	guard_defeated = true

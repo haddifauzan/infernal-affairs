@@ -19,18 +19,12 @@ enum HazardPhase {
 	ERUPTION = 2    # Blazing magma and flame eruption (1.5 - 2.0s) - Lethal hazard
 }
 
-# --- Fissure Grid Coordinates: All tiles of Left & Right Shortcut Bridges 'd' ---
+# --- Fissure Grid Coordinates: Central Shortcut Bridge over Lava River (y = 30..33, x = 24..27) ---
 var fissure_tiles: Array[Vector2i] = [
-	# Jembatan Kiri 'd' (x = 7..20, y = 20..21) - 28 tiles
-	Vector2i(7, 20), Vector2i(8, 20), Vector2i(9, 20), Vector2i(10, 20), Vector2i(11, 20), Vector2i(12, 20), Vector2i(13, 20),
-	Vector2i(14, 20), Vector2i(15, 20), Vector2i(16, 20), Vector2i(17, 20), Vector2i(18, 20), Vector2i(19, 20), Vector2i(20, 20),
-	Vector2i(7, 21), Vector2i(8, 21), Vector2i(9, 21), Vector2i(10, 21), Vector2i(11, 21), Vector2i(12, 21), Vector2i(13, 21),
-	Vector2i(14, 21), Vector2i(15, 21), Vector2i(16, 21), Vector2i(17, 21), Vector2i(18, 21), Vector2i(19, 21), Vector2i(20, 21),
-	# Jembatan Kanan 'd' (x = 23..36, y = 20..21) - 28 tiles
-	Vector2i(23, 20), Vector2i(24, 20), Vector2i(25, 20), Vector2i(26, 20), Vector2i(27, 20), Vector2i(28, 20), Vector2i(29, 20),
-	Vector2i(30, 20), Vector2i(31, 20), Vector2i(32, 20), Vector2i(33, 20), Vector2i(34, 20), Vector2i(35, 20), Vector2i(36, 20),
-	Vector2i(23, 21), Vector2i(24, 21), Vector2i(25, 21), Vector2i(26, 21), Vector2i(27, 21), Vector2i(28, 21), Vector2i(29, 21),
-	Vector2i(30, 21), Vector2i(31, 21), Vector2i(32, 21), Vector2i(33, 21), Vector2i(34, 21), Vector2i(35, 21), Vector2i(36, 21)
+	Vector2i(24, 30), Vector2i(25, 30), Vector2i(26, 30), Vector2i(27, 30),
+	Vector2i(24, 31), Vector2i(25, 31), Vector2i(26, 31), Vector2i(27, 31),
+	Vector2i(24, 32), Vector2i(25, 32), Vector2i(26, 32), Vector2i(27, 32),
+	Vector2i(24, 33), Vector2i(25, 33), Vector2i(26, 33), Vector2i(27, 33)
 ]
 
 # --- Timing Configurations ---
@@ -58,6 +52,8 @@ const PLAYER_LAVA_DAMAGE: int = 12
 var tex_dormant: Texture2D
 var tex_warning: Texture2D
 var tex_eruption: Texture2D
+var tex_warning_sheet: Texture2D
+var tex_eruption_sheet: Texture2D
 var pulse_time: float = 0.0
 
 # Sound effects
@@ -74,6 +70,8 @@ func _load_hazard_textures() -> void:
 	tex_dormant = load("res://assets/sprites/map/hazards/fissure_dormant.png")
 	tex_warning = load("res://assets/sprites/map/hazards/fissure_warning.png")
 	tex_eruption = load("res://assets/sprites/map/hazards/fissure_eruption.png")
+	tex_warning_sheet = load("res://assets/sprites/map/hazards/vfx_warning_crack_sheet.png")
+	tex_eruption_sheet = load("res://assets/sprites/map/hazards/vfx_flame_column_sheet.png")
 
 func _setup_audio_players() -> void:
 	sfx_warning_player = AudioStreamPlayer.new()
@@ -103,39 +101,41 @@ func initialize(gm: GridManager, p: Node2D) -> void:
 
 func _populate_all_bridge_fissures() -> void:
 	fissure_tiles.clear()
+	# Only the Central Shortcut Bridge (x=24..27, y=30..33) contains stochastic eruption fissures!
+	# The West and East Safe Viaduct Bridges are 100% free of magma hazards.
 	if grid_manager and grid_manager.bridges_info.size() > 0:
 		for b in grid_manager.bridges_info:
-			for dy in range(b.h):
-				for dx in range(b.w):
-					fissure_tiles.append(Vector2i(b.x + dx, b.y + dy))
+			var bname: String = str(b.get("name", ""))
+			if "Shortcut" in bname or b.x == 24:
+				# Place fissures on the central bridge rows (y = 30..33)
+				for dy in range(1, b.h - 1):
+					for dx in range(b.w):
+						fissure_tiles.append(Vector2i(b.x + dx, b.y + dy))
 	else:
-		# Fallback to entire spans of Left Bridge (x=7..20) & Right Bridge (x=23..36) at y=20..21
-		for y in range(20, 22):
-			for x in range(7, 21): fissure_tiles.append(Vector2i(x, y))
-			for x in range(23, 37): fissure_tiles.append(Vector2i(x, y))
+		# Fallback to central shortcut bridge coordinates
+		for y in range(30, 34):
+			for x in range(24, 28):
+				fissure_tiles.append(Vector2i(x, y))
 
 func _setup_world_signposts() -> void:
 	if not grid_manager:
 		return
 	var ts: float = float(grid_manager.tile_size)
 
-	# 1. Jembatan Kiri 'd' (Pintas Berbahaya) at (13.5, 19.3)
-	_create_signpost("⚡ JALUR PINTAS BERBAHAYA (Jembatan Kiri 'd') ⚡", Vector2(13.5 * ts, 19.3 * ts), Color(1.0, 0.65, 0.2))
+	# 1. Jembatan Tengah (Jalur Pintas Berbahaya - Letupan Magma Stokastik) at (25.5, 28.2)
+	_create_signpost("⚡ JALUR PINTAS BERBAHAYA (Jembatan Magma Stokastik) ⚡", Vector2((GridManager.CENTER_X + 0.5) * ts, 28.2 * ts), Color(1.0, 0.45, 0.15))
 
-	# 2. Jembatan Kanan 'd' (Pintas Berbahaya) at (29.5, 19.3)
-	_create_signpost("⚡ JALUR PINTAS BERBAHAYA (Jembatan Kanan 'd') ⚡", Vector2(29.5 * ts, 19.3 * ts), Color(1.0, 0.65, 0.2))
+	# 2. Jembatan Sayap Barat (Jalur Utama Aman) at (8.0, 28.2)
+	_create_signpost("🛡 JALUR UTAMA BARAT (Viaduct Batu Aman) 🛡", Vector2(8.0 * ts, 28.2 * ts), Color(0.3, 1.0, 0.7))
 
-	# 3. Jalur Aman Kiri 'a' at (6.0, 23.5)
-	_create_signpost("🛡 JALUR 'a' AMAN (Ke Ground 'c') 🛡", Vector2(6.0 * ts, 23.5 * ts), Color(0.3, 1.0, 0.7))
+	# 3. Jembatan Sayap Timur (Jalur Utama Aman) at (44.0, 28.2)
+	_create_signpost("🛡 JALUR UTAMA TIMUR (Viaduct Batu Aman) 🛡", Vector2(44.0 * ts, 28.2 * ts), Color(0.3, 1.0, 0.7))
 
-	# 4. Jalur Aman Kanan 'a' at (38.0, 23.5)
-	_create_signpost("🛡 JALUR 'a' AMAN (Ke Ground 'c') 🛡", Vector2(38.0 * ts, 23.5 * ts), Color(0.3, 1.0, 0.7))
+	# 4. Simpang Lembah (Titik Keputusan MDP s1) at (25.5, 41.5)
+	_create_signpost("⮁ SIMPANG LEMBAH (Titik Keputusan MDP s1) ⮁", Vector2((GridManager.CENTER_X + 0.5) * ts, 41.5 * ts), Color(1.0, 0.9, 0.3))
 
-	# 5. Jalan Utama Tengah (Aman Bebas Magma) at (21.5, 23.5)
-	_create_signpost("🛡 JALAN UTAMA TENGAH (Aman Bebas Magma) 🛡", Vector2((GridManager.CENTER_X + 0.5) * ts, 23.5 * ts), Color(0.4, 0.95, 0.8))
-
-	# 6. Ground 'c' Pertemuan Detour & Resource 3 at (21.5, 36.2)
-	_create_signpost("⮁ GROUND 'c' (Detour Aman & Sanguine Well) ⮁", Vector2((GridManager.CENTER_X + 0.5) * ts, 36.2 * ts), Color(1.0, 0.9, 0.3))
+	# 5. Sacred Well Sanctuary (Kuil Tiga Altar Elemen) at (25.5, 52.5)
+	_create_signpost("✨ SACRED WELL SANCTUARY (Area Altar Elemen s0) ✨", Vector2((GridManager.CENTER_X + 0.5) * ts, 52.5 * ts), Color(1.0, 0.55, 0.8))
 
 func _create_signpost(text: String, world_pos: Vector2, color: Color) -> void:
 	var label = Label.new()
@@ -229,16 +229,13 @@ func is_hazard_signal_active(minion_pos: Vector2i = Vector2i.ZERO) -> bool:
 
 	return false
 
-## Player Bluffing: Standing near either of the 2 shortcut bridges 'd'
+## Player Bluffing: Standing on or directly guarding the Central Shortcut Bridge
 func is_player_bluffing() -> bool:
 	if not is_instance_valid(player) or not ("grid_pos" in player):
 		return false
 	var p_pos: Vector2i = player.grid_pos
-	# Near Jembatan Kiri 'd' (x: 5..16, y: 19..22)
-	var near_left: bool = (p_pos.x >= 5 and p_pos.x <= 16 and p_pos.y >= 19 and p_pos.y <= 22)
-	# Near Jembatan Kanan 'd' (x: 27..38, y: 19..22)
-	var near_right: bool = (p_pos.x >= 27 and p_pos.x <= 38 and p_pos.y >= 19 and p_pos.y <= 22)
-	return near_left or near_right
+	# On or near the Central Shortcut Bridge (x: 23..28, y: 28..35)
+	return (p_pos.x >= 23 and p_pos.x <= 28 and p_pos.y >= 28 and p_pos.y <= 35)
 
 func _check_collisions(_delta: float) -> void:
 	if current_phase != HazardPhase.ERUPTION:
@@ -307,8 +304,14 @@ func _draw() -> void:
 					draw_rect(rect, Color(0.15, 0.12, 0.15, 0.45))
 
 			HazardPhase.WARNING:
-				if tex_warning:
-					# Pulsing hot warning glow
+				if tex_warning_sheet:
+					# 4 frames warning animation (32x32 per frame)
+					var frame_idx = int(fmod(pulse_time * 6.0 + (tile.x + tile.y), 4.0))
+					var src_rect = Rect2(frame_idx * 32.0, 0.0, 32.0, 32.0)
+					var glow: float = 0.85 + sin(pulse_time * 8.0) * 0.15
+					draw_texture_rect_region(tex_warning_sheet, rect, src_rect, Color(1.0, 1.0, 1.0, glow))
+				elif tex_warning:
+					# Pulsing hot warning glow fallback
 					var glow: float = 0.85 + sin(pulse_time * 8.0) * 0.15
 					draw_texture_rect(tex_warning, rect, false, Color(1.0, 1.0, 1.0, glow))
 				else:
@@ -316,27 +319,46 @@ func _draw() -> void:
 					draw_rect(rect, warn_color)
 
 			HazardPhase.ERUPTION:
-				if tex_eruption:
-					# Taller fiery erupting column extending above the bridge tile
+				if tex_eruption_sheet:
+					# 6 frames vertical flame geyser animation (32x64 per frame)
+					var frame_idx = int(fmod(pulse_time * 12.0 + (tile.x * 2 + tile.y), 6.0))
+					var src_rect = Rect2(frame_idx * 32.0, 0.0, 32.0, 64.0)
+					var erupt_rect = Rect2(world_x, world_y - 32.0, ts, ts + 32.0)
+					var flicker = Color(1.0, 0.95 + sin(pulse_time * 20.0 + tile.x) * 0.05, 0.85 + cos(pulse_time * 16.0) * 0.15)
+					draw_texture_rect_region(tex_eruption_sheet, erupt_rect, src_rect, flicker)
+				elif tex_eruption:
+					# Taller fiery erupting column extending above the bridge tile fallback
 					var erupt_rect = Rect2(world_x, world_y - 14.0, ts, ts + 14.0)
 					var flicker = Color(1.0, 0.9 + sin(pulse_time * 16.0 + tile.x * 0.5) * 0.1, 0.8 + cos(pulse_time * 14.0 + tile.y) * 0.2)
 					draw_texture_rect(tex_eruption, erupt_rect, false, flicker)
 				else:
 					draw_rect(rect, Color(1.0, 0.2, 0.0, 0.95))
 
-	# 2. Continuous Bridge Fiery Aura & Inferno Effects across the entire span of both bridges
+	# 2. Continuous Bridge Fiery Aura & Inferno Effects across the Central Shortcut Bridge
+	# NOTE: The outer roads and side bridges are safe zones and do not glow with magma hazard.
+	var shortcut_bx: float = 24.0 * ts
+	var shortcut_by: float = 29.0 * ts
+	var shortcut_bw: float = 4.0 * ts
+	var shortcut_bh: float = 6.0 * ts
+	if grid_manager and grid_manager.bridges_info.size() > 0:
+		for b in grid_manager.bridges_info:
+			var bname: String = str(b.get("name", ""))
+			if "Shortcut" in bname or b.x == 24:
+				shortcut_bx = float(b.x) * ts
+				shortcut_by = float(b.y) * ts
+				shortcut_bw = float(b.w) * ts
+				shortcut_bh = float(b.h) * ts
+				break
+
 	if current_phase == HazardPhase.WARNING:
-		# Ambient orange heat shimmer across both bridge spans
+		# Ambient orange heat shimmer confined strictly to the Central Shortcut Bridge
 		var warn_glow = 0.22 + sin(pulse_time * 7.0) * 0.08
-		draw_rect(Rect2(7.0 * ts, 20.0 * ts, 14.0 * ts, 2.0 * ts), Color(1.0, 0.45, 0.05, warn_glow), true)
-		draw_rect(Rect2(23.0 * ts, 20.0 * ts, 14.0 * ts, 2.0 * ts), Color(1.0, 0.45, 0.05, warn_glow), true)
+		draw_rect(Rect2(shortcut_bx, shortcut_by, shortcut_bw, shortcut_bh), Color(1.0, 0.45, 0.05, warn_glow), true)
 	elif current_phase == HazardPhase.ERUPTION:
-		# Blazing fiery sea of inferno spanning the entirety of both bridges
+		# Blazing fiery sea of inferno confined strictly to the Central Shortcut Bridge
 		var erupt_glow = 0.38 + sin(pulse_time * 18.0) * 0.10
-		draw_rect(Rect2(7.0 * ts, 20.0 * ts - 12.0, 14.0 * ts, 2.0 * ts + 12.0), Color(1.0, 0.25, 0.0, erupt_glow), true)
-		draw_rect(Rect2(23.0 * ts, 20.0 * ts - 12.0, 14.0 * ts, 2.0 * ts + 12.0), Color(1.0, 0.25, 0.0, erupt_glow), true)
+		draw_rect(Rect2(shortcut_bx, shortcut_by - 6.0, shortcut_bw, shortcut_bh + 6.0), Color(1.0, 0.25, 0.0, erupt_glow), true)
 		# Roaring bright golden core along the central bridge axis
 		var core_flicker = 0.50 + cos(pulse_time * 22.0) * 0.15
-		draw_rect(Rect2(7.0 * ts, 20.4 * ts, 14.0 * ts, 1.2 * ts), Color(1.0, 0.85, 0.25, core_flicker), true)
-		draw_rect(Rect2(23.0 * ts, 20.4 * ts, 14.0 * ts, 1.2 * ts), Color(1.0, 0.85, 0.25, core_flicker), true)
+		draw_rect(Rect2(shortcut_bx + 0.5 * ts, shortcut_by, shortcut_bw - 1.0 * ts, shortcut_bh), Color(1.0, 0.85, 0.25, core_flicker), true)
 

@@ -32,7 +32,6 @@ var current_step_k: int = 3
 var last_solution: Dictionary = {}
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(460, 360)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_styles()
 	_build_ui_tree()
@@ -50,15 +49,15 @@ func _setup_styles() -> void:
 	style_box.corner_radius_top_right = 8
 	style_box.corner_radius_bottom_left = 8
 	style_box.corner_radius_bottom_right = 8
-	style_box.content_margin_left = 14
-	style_box.content_margin_top = 10
-	style_box.content_margin_right = 14
-	style_box.content_margin_bottom = 10
+	style_box.content_margin_left = 10
+	style_box.content_margin_top = 8
+	style_box.content_margin_right = 10
+	style_box.content_margin_bottom = 8
 	add_theme_stylebox_override("panel", style_box)
 
 func _build_ui_tree() -> void:
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 5)
 	add_child(vbox)
 
 	# --- Header Row ---
@@ -66,15 +65,16 @@ func _build_ui_tree() -> void:
 	vbox.add_child(header_hbox)
 
 	title_label = Label.new()
-	title_label.text = "✦ TAHAP 4: MDP & BAYESIAN DECISION ✦"
+	title_label.text = "✦ TAHAP 4: MDP & BAYESIAN ✦"
 	title_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
-	title_label.add_theme_font_size_override("font_size", 13)
+	title_label.add_theme_font_size_override("font_size", 11)
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_hbox.add_child(title_label)
 
 	btn_close = Button.new()
 	btn_close.text = " [X] "
 	btn_close.flat = true
+	btn_close.add_theme_font_size_override("font_size", 10)
 	btn_close.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	btn_close.pressed.connect(func(): visible = false)
 	header_hbox.add_child(btn_close)
@@ -83,70 +83,50 @@ func _build_ui_tree() -> void:
 	var belief_box = PanelContainer.new()
 	var b_style = StyleBoxFlat.new()
 	b_style.bg_color = Color(0.12, 0.14, 0.20, 0.9)
-	b_style.corner_radius_top_left = 6
-	b_style.corner_radius_top_right = 6
-	b_style.corner_radius_bottom_left = 6
-	b_style.corner_radius_bottom_right = 6
-	b_style.content_margin_left = 8
-	b_style.content_margin_top = 6
-	b_style.content_margin_right = 8
-	b_style.content_margin_bottom = 6
+	b_style.corner_radius_top_left = 5
+	b_style.corner_radius_top_right = 5
+	b_style.corner_radius_bottom_left = 5
+	b_style.corner_radius_bottom_right = 5
+	b_style.content_margin_left = 6
+	b_style.content_margin_top = 4
+	b_style.content_margin_right = 6
+	b_style.content_margin_bottom = 4
 	belief_box.add_theme_stylebox_override("panel", b_style)
 	vbox.add_child(belief_box)
 
 	var b_vbox = VBoxContainer.new()
-	b_vbox.add_theme_constant_override("separation", 4)
+	b_vbox.add_theme_constant_override("separation", 2)
 	belief_box.add_child(b_vbox)
 
 	belief_label = Label.new()
 	belief_label.text = "Belief: P(Hazard) = 0.10 | Prior Normal"
 	belief_label.add_theme_color_override("font_color", Color(0.4, 0.9, 1.0))
-	belief_label.add_theme_font_size_override("font_size", 12)
+	belief_label.add_theme_font_size_override("font_size", 10)
 	b_vbox.add_child(belief_label)
 
 	status_badge = Label.new()
 	status_badge.text = "★ POLICY π*(Simpang) = PINTAS (Shortcut)"
 	status_badge.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
-	status_badge.add_theme_font_size_override("font_size", 12)
+	status_badge.add_theme_font_size_override("font_size", 10)
 	b_vbox.add_child(status_badge)
 
 	# --- Live Table Display (RichTextLabel) ---
 	table_v_label = RichTextLabel.new()
 	table_v_label.bbcode_enabled = true
-	table_v_label.custom_minimum_size = Vector2(430, 140)
+	table_v_label.fit_content = true
 	table_v_label.scroll_active = false
-	table_v_label.add_theme_font_size_override("normal_font_size", 11)
+	table_v_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	table_v_label.add_theme_font_size_override("normal_font_size", 9)
 	vbox.add_child(table_v_label)
 
 	# --- Theoretical Formula Footer ---
 	formula_label = RichTextLabel.new()
 	formula_label.bbcode_enabled = true
-	formula_label.custom_minimum_size = Vector2(430, 42)
+	formula_label.fit_content = true
 	formula_label.scroll_active = false
-	formula_label.add_theme_font_size_override("normal_font_size", 10)
-	formula_label.text = "[color=#aaaaaa]Bellman: Q(s, a) = Σ P(s'|s, a) [R(s') + γ V(s')] | γ = 0.8, R_step = -2\nBayes: P(H|W) = [P(W|H)·P(H)] / P(W) = 0.09 / 0.18 = 0.50[/color]"
+	formula_label.add_theme_font_size_override("normal_font_size", 8)
+	formula_label.text = "[color=#888899]Bellman: Q(s,a) = Σ P(s'|s,a)[R(s')+γV(s')] | γ=0.8, R=-2\nBayes: P(H|W) = [P(W|H)·P(H)] / P(W) = 0.50[/color]"
 	vbox.add_child(formula_label)
-
-	# --- Button Controls Row ---
-	var btn_hbox = HBoxContainer.new()
-	btn_hbox.add_theme_constant_override("separation", 8)
-	vbox.add_child(btn_hbox)
-
-	btn_toggle_warning = Button.new()
-	btn_toggle_warning.text = "⚠ Force Warning (W=1)"
-	btn_toggle_warning.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_toggle_warning.pressed.connect(_on_toggle_warning_pressed)
-	btn_hbox.add_child(btn_toggle_warning)
-
-	btn_step_iter = Button.new()
-	btn_step_iter.text = "Step Iter (k+1)"
-	btn_step_iter.pressed.connect(_on_step_iteration_pressed)
-	btn_hbox.add_child(btn_step_iter)
-
-	btn_reset = Button.new()
-	btn_reset.text = "Reset Normal"
-	btn_reset.pressed.connect(_on_reset_pressed)
-	btn_hbox.add_child(btn_reset)
 
 func update_mdp_display(hazard_prob: float, warning_active: bool) -> void:
 	current_f = hazard_prob
@@ -167,6 +147,7 @@ func update_mdp_display(hazard_prob: float, warning_active: bool) -> void:
 		status_badge.add_theme_color_override("font_color", Color(0.3, 1.0, 0.5))
 
 	_render_table()
+	reset_size()
 
 func _render_table() -> void:
 	var history = last_solution.get("history", [])
@@ -180,7 +161,6 @@ func _render_table() -> void:
 	var q_simpang: Dictionary = Q.get(MDPSolver.State.SIMPANG_LEMBAH, {})
 	var q_pintas = q_simpang.get(MDPSolver.Action.PINTAS, 0.0)
 	var q_raya = q_simpang.get(MDPSolver.Action.RAYA, 0.0)
-	var q_balik = q_simpang.get(MDPSolver.Action.BALIK, 0.0)
 
 	var v_altar = V.get(MDPSolver.State.ALTAR, 0.0)
 	var v_simpang = V.get(MDPSolver.State.SIMPANG_LEMBAH, 0.0)
@@ -190,18 +170,16 @@ func _render_table() -> void:
 	var col_pintas = "#55ff55" if q_pintas >= q_raya else "#ff5555"
 	var col_raya = "#55ff55" if q_raya > q_pintas else "#cccccc"
 
-	var text = "[b]Tabel Komputasi Value Iteration (Iterasi k = %d):[/b]\n" % show_k
-	text += "------------------------------------------------------------\n"
-	text += "[color=#eedd88]State[/color]               | [color=#eedd88]Q(s, Pintas)[/color] | [color=#eedd88]Q(s, Raya)[/color] | [color=#eedd88]V(s) Optimal[/color]\n"
-	text += "------------------------------------------------------------\n"
-	text += "Altar (s0)         |   —         |   —        | %6.2f\n" % v_altar
-	text += "Simpang (s1)       | [color=%s]%6.2f[/color]     | [color=%s]%6.2f[/color]   | [color=#ffee44]%6.2f (%s)[/color]\n" % [
+	var text = "[b]Value Iteration (k=%d):[/b]\n" % show_k
+	text += "State | Q(Pintas) | Q(Raya) | V*(s)\n"
+	text += "----------------------------------------\n"
+	text += "Altar (s0)   |   —   |   —   | %5.2f\n" % v_altar
+	text += "Simpang (s1) | [color=%s]%5.2f[/color] | [color=%s]%5.2f[/color] | [color=#ffee44]%5.2f (%s)[/color]\n" % [
 		col_pintas, q_pintas, col_raya, q_raya, v_simpang, best_act
 	]
-	text += "Jalur Utama (s3)   |   —         |   —        | %6.2f\n" % v_raya
-	text += "Pos Penjaga (Goal) | Terminal (+10)           |  10.00\n"
-	text += "Magma Trap (Fail)  | Terminal (-20)           | -20.00\n"
-	text += "------------------------------------------------------------"
+	text += "Utama (s3)   |   —   |   —   | %5.2f\n" % v_raya
+	text += "Goal (s4)    | Terminal (+10)    | 10.00\n"
+	text += "Trap (s5)    | Terminal (-20)    |-20.00"
 
 	table_v_label.text = text
 

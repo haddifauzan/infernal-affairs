@@ -21,6 +21,12 @@ const AwakeningBannerModalScript = preload("res://scripts/UI/AwakeningBannerModa
 @onready var algo_label: Label                  = $CanvasLayer/InfoPanel/VBox/AlgoLabel
 
 var current_algorithm: String = "astar"
+
+# Camera & Zoom controls
+var target_zoom: float = 1.0
+const MIN_ZOOM: float = 0.5   # Full tactical map overview
+const MAX_ZOOM: float = 2.0   # Close-up pixel art inspect
+const ZOOM_STEP: float = 0.15
 var is_game_over: bool = false
 var is_in_battle: bool = false
 
@@ -278,6 +284,7 @@ func start_new_game() -> void:
 
 	# Camera limits & setup
 	camera.position = player.position
+	camera.zoom = Vector2(target_zoom, target_zoom)
 	camera.limit_left   = 0
 	camera.limit_top    = 0
 	camera.limit_right  = grid_manager.width  * grid_manager.tile_size
@@ -286,7 +293,7 @@ func start_new_game() -> void:
 	_update_algo_label()
 	_update_player_stats_hud()
 	_update_debug_hud()
-	info_label.text = "Infernal Affairs - Tahap 4 (Logic, Planning & MDP)  |  [M] MDP HUD  |  [L] Lv-Up  |  [Tab] A*/UCS  |  [F3] Debug  |  [R] Reset"
+	info_label.text = "Infernal Affairs - Tahap 4  |  Scroll/[-][+] Zoom  |  [M] MDP HUD  |  [L] Lv-Up  |  [Tab] A*/UCS  |  [P] Pause"
 
 func _on_grid_updated() -> void:
 	arena_map.build_map(grid_manager)
@@ -297,9 +304,9 @@ func _on_grid_updated() -> void:
 func _spawn_resource_nodes() -> void:
 	_cleanup_resource_nodes()
 	var altars_def = [
-		{"pos": Vector2i(5, 21), "elem": "Flame", "name": "Ignis Altar"},
-		{"pos": Vector2i(38, 21), "elem": "Shadow", "name": "Abyssal Fissure"},
-		{"pos": Vector2i(21, 38), "elem": "Blood", "name": "Sanguine Well"}
+		{"pos": Vector2i(17, 49), "elem": "Flame", "name": "Ignis Altar"},
+		{"pos": Vector2i(33, 49), "elem": "Shadow", "name": "Abyssal Fissure"},
+		{"pos": Vector2i(25, 50), "elem": "Blood", "name": "Sanguine Well"}
 	]
 	for def in altars_def:
 		var node: ResourceNodeEntity = ResourceNodeScript.new() as ResourceNodeEntity
@@ -317,9 +324,9 @@ func _cleanup_resource_nodes() -> void:
 
 func _spawn_minions() -> void:
 	var carrier_altars: Array[Vector2i] = [
-		Vector2i(5, 21),
-		Vector2i(38, 21),
-		Vector2i(21, 38)
+		Vector2i(17, 49),
+		Vector2i(33, 49),
+		Vector2i(25, 50)
 	]
 	var carrier_elems: Array[String] = ["Flame", "Shadow", "Blood"]
 
@@ -329,7 +336,14 @@ func _spawn_minions() -> void:
 		minion.process_mode = Node.PROCESS_MODE_PAUSABLE
 		add_child(minion)
 
-		var pos = grid_manager.get_random_wilderness_pos()
+		# Spawn minion di dekat altar masing-masing (i < 3) atau di area liar yang jauh dari spawn Player
+		var pos = carrier_altars[i] if i < carrier_altars.size() else grid_manager.get_random_wilderness_pos()
+		if player and is_instance_valid(player):
+			var attempts := 0
+			while attempts < 15 and (abs(pos.x - player.grid_pos.x) + abs(pos.y - player.grid_pos.y)) <= 7:
+				attempts += 1
+				pos = grid_manager.get_random_wilderness_pos()
+
 		minion.initialize(grid_manager, pos, player)
 		minion.set_algorithm(current_algorithm)
 
@@ -587,11 +601,14 @@ func _spawn_dropped_shard(pos: Vector2i, elem: String) -> void:
 
 func _on_dropped_shard_collected(shard: DroppedShardEntity, elem: String) -> void:
 	active_dropped_shards.erase(shard)
-	GameState.add_exp(25)
-	GameState.potions += 1
+	var leveled_up: bool = GameState.add_exp(25)
+	GameState.potions = mini(GameState.MAX_POTIONS, GameState.potions + 1)
 	GameState.heal_player(15)
 	_play_sfx(sfx_deliver_shard)
-	_show_floating_alert("✦ SHARD %s DIAMBIL! (+25 EXP, +1 Potion, +15 HP) ✦" % elem.to_upper(), Color(0.3, 1.0, 0.5))
+	if leveled_up:
+		_show_floating_alert("✦ SHARD %s DIAMBIL! LEVEL UP KE LEVEL %d! ✦" % [elem.to_upper(), GameState.level], Color(1.0, 0.85, 0.1))
+	else:
+		_show_floating_alert("✦ SHARD %s DIAMBIL! (+25 EXP, +1 Potion, +15 HP) ✦" % elem.to_upper(), Color(0.3, 1.0, 0.5))
 	_update_player_stats_hud()
 
 func _build_mdp_hud() -> void:
@@ -600,6 +617,7 @@ func _build_mdp_hud() -> void:
 	mdp_debug_hud = MDPDebugHUDScript.new() as MDPDebugHUD
 	mdp_debug_hud.name = "MDPDebugHUD"
 	mdp_debug_hud.process_mode = Node.PROCESS_MODE_ALWAYS
+	mdp_debug_hud.visible = true  # Aktif saat game baru dimulai
 	mdp_debug_hud.force_warning_toggled.connect(func(active: bool):
 		if is_instance_valid(hazard_manager):
 			hazard_manager.force_warning_active = active
@@ -1398,8 +1416,28 @@ func _grid_distance(a: Vector2i, b: Vector2i) -> int:
 # INPUT & PROCESS
 # ---------------------------------------------------------------
 func _unhandled_input(event: InputEvent) -> void:
+	# Mouse Wheel Zoom In / Out
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_adjust_zoom(ZOOM_STEP)
+			return
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_adjust_zoom(-ZOOM_STEP)
+			return
+
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_in_battle:
+			return
+
+		# Keyboard Zoom Controls (+ / - or = / _)
+		if event.keycode == KEY_EQUAL or event.keycode == KEY_PLUS or event.keycode == KEY_KP_ADD:
+			_adjust_zoom(ZOOM_STEP)
+			return
+		elif event.keycode == KEY_MINUS or event.keycode == KEY_UNDERSCORE or event.keycode == KEY_KP_SUBTRACT:
+			_adjust_zoom(-ZOOM_STEP)
+			return
+		elif event.keycode == KEY_0 or event.keycode == KEY_KP_0:
+			target_zoom = 1.0
 			return
 
 		# P key or Escape key to toggle Pause / Concept briefing
@@ -1451,6 +1489,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _toggle_algorithm() -> void:
 	_set_algorithm("ucs" if current_algorithm == "astar" else "astar")
 
+func _adjust_zoom(delta_zoom: float) -> void:
+	target_zoom = clampf(target_zoom + delta_zoom, MIN_ZOOM, MAX_ZOOM)
+
 func _set_algorithm(algo: String) -> void:
 	current_algorithm = algo
 	_update_algo_label()
@@ -1487,9 +1528,11 @@ func _physics_process(delta: float) -> void:
 		var spulse: float = 0.82 + sin(float(Time.get_ticks_msec()) / 220.0) * 0.18
 		gate_seal_sprite.modulate.a = spulse
 
-	# Camera smooth follow
+	# Camera smooth follow & zoom interpolation
 	if player and camera:
 		camera.position = camera.position.lerp(player.position, 0.08)
+		if camera.zoom.x != target_zoom:
+			camera.zoom = camera.zoom.lerp(Vector2(target_zoom, target_zoom), 0.15)
 
 # ---------------------------------------------------------------
 # PLAYER STATS HUD (BOTTOM-LEFT CORNER)
@@ -1666,6 +1709,52 @@ func _build_player_stats_hud() -> void:
 	hud_gate_badge.add_theme_color_override("font_color", Color(1.0, 0.75, 0.2))
 	right_vbox.add_child(hud_gate_badge)
 
+	# Row 7: Tombol Kontrol MDP & Simulasi Tahap 4
+	var mdp_ctrl_row := HBoxContainer.new()
+	mdp_ctrl_row.add_theme_constant_override("separation", 6)
+	right_vbox.add_child(mdp_ctrl_row)
+
+	var btn_warn := Button.new()
+	btn_warn.text = "⚠ Warn (W=1)"
+	btn_warn.add_theme_font_size_override("font_size", 9)
+	btn_warn.pressed.connect(func():
+		if is_instance_valid(hazard_manager):
+			hazard_manager.force_warning_active = not hazard_manager.force_warning_active
+			btn_warn.text = "✓ Clear (W=0)" if hazard_manager.force_warning_active else "⚠ Warn (W=1)"
+			_on_hazard_phase_changed(hazard_manager.current_phase)
+	)
+	mdp_ctrl_row.add_child(btn_warn)
+
+	var btn_step := Button.new()
+	btn_step.text = "Iter (k+1)"
+	btn_step.add_theme_font_size_override("font_size", 9)
+	btn_step.pressed.connect(func():
+		if is_instance_valid(mdp_debug_hud):
+			mdp_debug_hud._on_step_iteration_pressed()
+	)
+	mdp_ctrl_row.add_child(btn_step)
+
+	var btn_rst := Button.new()
+	btn_rst.text = "Reset"
+	btn_rst.add_theme_font_size_override("font_size", 9)
+	btn_rst.pressed.connect(func():
+		if is_instance_valid(hazard_manager):
+			hazard_manager.force_warning_active = false
+			btn_warn.text = "⚠ Warn (W=1)"
+		if is_instance_valid(mdp_debug_hud):
+			mdp_debug_hud._on_reset_pressed()
+	)
+	mdp_ctrl_row.add_child(btn_rst)
+
+	var btn_tog_hud := Button.new()
+	btn_tog_hud.text = "HUD [M]"
+	btn_tog_hud.add_theme_font_size_override("font_size", 9)
+	btn_tog_hud.pressed.connect(func():
+		if is_instance_valid(mdp_debug_hud):
+			mdp_debug_hud.visible = not mdp_debug_hud.visible
+	)
+	mdp_ctrl_row.add_child(btn_tog_hud)
+
 	_update_player_stats_hud()
 	_reposition_hud_panels()
 
@@ -1676,8 +1765,8 @@ func _reposition_hud_panels() -> void:
 	var vp_size: Vector2 = vp.get_visible_rect().size
 
 	if is_instance_valid(player_hud_panel):
-		var hud_w: float = 445.0
-		var hud_h: float = 165.0
+		var hud_w: float = 455.0
+		var hud_h: float = 190.0
 		player_hud_panel.custom_minimum_size = Vector2(hud_w, hud_h)
 		player_hud_panel.size = Vector2(hud_w, hud_h)
 		player_hud_panel.position = Vector2(16.0, maxf(16.0, vp_size.y - hud_h - 16.0))
@@ -1690,10 +1779,9 @@ func _reposition_hud_panels() -> void:
 		debug_panel.position = Vector2(maxf(16.0, vp_size.x - dbg_w - 16.0), maxf(16.0, vp_size.y - dbg_h - 16.0))
 
 	if is_instance_valid(mdp_debug_hud):
-		var mdp_w: float = 460.0
-		var mdp_h: float = 360.0
-		mdp_debug_hud.custom_minimum_size = Vector2(mdp_w, mdp_h)
-		mdp_debug_hud.size = Vector2(mdp_w, mdp_h)
+		var mdp_w: float = 330.0
+		mdp_debug_hud.custom_minimum_size = Vector2(mdp_w, 0.0)
+		mdp_debug_hud.reset_size()
 		mdp_debug_hud.position = Vector2(maxf(16.0, vp_size.x - mdp_w - 16.0), 65.0)
 
 func _update_player_stats_hud() -> void:

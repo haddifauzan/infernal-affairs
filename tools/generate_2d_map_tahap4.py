@@ -1,428 +1,471 @@
 """
-Generate 2D Map Visualization for Tahap 4 (Infernal Affairs)
-Decision Under Uncertainty & Markov Decision Processes (MDP)
-Matches:
-- 09_Decision under uncertainity.pdf
-- PLAN_TAHAP_4.md
-- GridManager.gd topology (44x46 tiles)
-- StochasticHazardManager.gd
+tools/generate_2d_map_tahap4.py
+Generates the definitive, highly detailed 2D Map Visualization for Tahap 4 (Infernal Affairs)
+based on Opsi 1 (Sungai Horizontal & 3 Jembatan Rapi) with user enhancements:
+- Clean, tidy, large flowing lava river asset (river_grand_horizontal.png, 192 px tall, seamless horizontally, zero rock stripes in river).
+- Distinct paved roadways: Sturdy slate stone paver highway for Jalur Utama vs Glowing cracked volcanic basalt for Jalur Pintas.
+- Rich environmental obstacles: Charred trees, large rock formations, crystal spires, decorative lava pools.
+- Dedicated Southern Sanctuary for elemental altars.
+- 100% compliant with 09 Decision under uncertainty (MDP & Bayesian Updating).
 """
 
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
+import math
 from collections import deque
+from PIL import Image, ImageDraw, ImageFont
 
-WIDTH = 44
-HEIGHT = 46
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ARTIFACT_DIR = "C:/Users/MyBook Hype AMD/.gemini/antigravity/brain/07868943-55b7-4b4c-ab20-c1b7547b1bbf"
+
+WIDTH = 52
+HEIGHT = 56
+TILE_SIZE = 32
+
+CENTER_X = 25
+WALL_Y_TOP = 17
+GATE_Y = 18
+COURTYARD_Y = 20
 
 TileType = {
     "GROUND": 0,
     "OBSTACLE": 1,
     "LAVA": 2,
-    "BRIDGE": 3
+    "FISSURE": 3
 }
 
-# 1. Build Grid matching GridManager.gd
-grid = [[TileType["GROUND"] for _ in range(WIDTH)] for _ in range(HEIGHT)]
-
-# Outer perimeter
-for x in range(WIDTH):
-    grid[0][x] = TileType["OBSTACLE"]
-    grid[HEIGHT - 1][x] = TileType["OBSTACLE"]
-for y in range(HEIGHT):
-    grid[y][0] = TileType["OBSTACLE"]
-    grid[y][WIDTH - 1] = TileType["OBSTACLE"]
-
-CENTER_X = 21
-COURTYARD_Y = 19
-
-# Castle walls & pillars (Map 2)
-for y in range(1, 17):
-    grid[y][1] = TileType["OBSTACLE"]
-    grid[y][2] = TileType["OBSTACLE"]
-    grid[y][WIDTH - 2] = TileType["OBSTACLE"]
-    grid[y][WIDTH - 3] = TileType["OBSTACLE"]
-
-for py in [6, 10, 14]:
-    for px in [8, 14, 28, 34]:
-        grid[py][px] = TileType["OBSTACLE"]
-        grid[py + 1][px] = TileType["OBSTACLE"]
-
-# Castle front wall at y = 17..18
-for y in [17, 18]:
-    for x in range(1, WIDTH - 1):
-        if x != CENTER_X and x != CENTER_X + 1:
-            grid[y][x] = TileType["OBSTACLE"]
-
-# Castle wall foot at y = 19
-for x in range(1, WIDTH - 1):
-    if x != CENTER_X and x != CENTER_X + 1:
-        if x not in [5, 6, 37, 38]:
-            grid[COURTYARD_Y][x] = TileType["OBSTACLE"]
-
-# Lava basins (y = 20..34)
-for y in range(20, 35):
-    for x in range(1, 5):
-        grid[y][x] = TileType["LAVA"]
-    for x in range(7, 21):
-        grid[y][x] = TileType["LAVA"]
-    for x in range(23, 37):
-        grid[y][x] = TileType["LAVA"]
-    for x in range(39, WIDTH - 1):
-        grid[y][x] = TileType["LAVA"]
-
-# Clear Safe Paths 'a', Central Road, and Ground 'c'
-for y in range(20, 35):
-    for x in [5, 6]:
-        grid[y][x] = TileType["GROUND"]
-    for x in [37, 38]:
-        grid[y][x] = TileType["GROUND"]
-
-for y in range(COURTYARD_Y, 35):
-    for x in [21, 22]:
-        grid[y][x] = TileType["GROUND"]
-
-for y in range(35, HEIGHT - 1):
-    for x in range(1, WIDTH - 1):
-        grid[y][x] = TileType["GROUND"]
-
-# Shortcut Bridges 'd' (y = 20..21)
-bridge_tiles = set()
-for dy in range(2):
-    for dx in range(14):
-        bx1, by1 = 7 + dx, 20 + dy
-        bx2, by2 = 23 + dx, 20 + dy
-        grid[by1][bx1] = TileType["BRIDGE"]
-        grid[by2][bx2] = TileType["BRIDGE"]
-        bridge_tiles.add((bx1, by1))
-        bridge_tiles.add((bx2, by2))
-
-# Landmarks in Ground 'c'
-landmarks_2x2 = [(10, 41), (32, 41), (2, 38), (40, 38), (15, 43), (27, 43)]
-for bx, by in landmarks_2x2:
-    for dy in [0, 1]:
-        for dx in [0, 1]:
-            if 0 <= bx + dx < WIDTH and 0 <= by + dy < HEIGHT:
-                grid[by + dy][bx + dx] = TileType["OBSTACLE"]
-
-landmarks_1x1 = [(8, 39), (34, 39), (17, 42), (25, 42)]
-for x, y in landmarks_1x1:
-    grid[y][x] = TileType["OBSTACLE"]
-
-trees = [(2, 35), (41, 35), (6, 42), (37, 42), (12, 44), (30, 44)]
-for x, y in trees:
-    grid[y][x] = TileType["OBSTACLE"]
-
-# BFS Pathfinding for Route Overlays
-def is_walkable(x, y, allow_bridges=True):
-    if not (0 <= x < WIDTH and 0 <= y < HEIGHT):
-        return False
-    t = grid[y][x]
-    if t == TileType["GROUND"]:
-        return True
-    if t == TileType["BRIDGE"] and allow_bridges:
-        return True
-    return False
-
-def bfs(start, goal, allow_bridges=True):
-    q = deque([(start, [start])])
-    visited = {start}
-    dirs = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-    while q:
-        curr, path = q.popleft()
-        if curr == goal:
-            return path
-        for dx, dy in dirs:
-            nxt = (curr[0] + dx, curr[1] + dy)
-            if is_walkable(nxt[0], nxt[1], allow_bridges) and nxt not in visited:
-                visited.add(nxt)
-                q.append((nxt, path + [nxt]))
+def load_sprite(rel_path, size=None):
+    p = os.path.join(BASE_DIR, rel_path)
+    if os.path.exists(p):
+        img = Image.open(p).convert("RGBA")
+        if size:
+            img = img.resize(size, Image.Resampling.LANCZOS)
+        return img
     return None
 
-altar_ignis = (5, 21)
-altar_abyssal = (38, 21)
-altar_sanguine = (21, 38)
-guard_post = (21, 19)
+# Load sprites
+tex_castle = load_sprite("assets/sprites/map/ground/ground_castle.png", (64, 64))
+tex_wild = load_sprite("assets/sprites/map/ground/ground_wilderness.png", (64, 64))
+tex_river_grand = load_sprite("assets/sprites/map/lava/extracted/river_grand_horizontal.png")
+tex_river_h = load_sprite("assets/sprites/map/lava/extracted/river_h.png")
+tex_wall_str = load_sprite("assets/sprites/map/obstacles/wall_straight_large.png")
+tex_wall_crn = load_sprite("assets/sprites/map/obstacles/wall_corner_large.png")
+tex_wall_twr = load_sprite("assets/sprites/map/obstacles/wall_tower_large.png")
+tex_wall_pil = load_sprite("assets/sprites/map/obstacles/wall_pillar_large.png")
+tex_gate = load_sprite("assets/sprites/map/obstacles/gate_hell_closed.png")
+tex_throne = load_sprite("assets/sprites/map/obstacles/throne_boss.png")
+tex_altar_ignis = load_sprite("assets/sprites/map/obstacles/altar_ignis.png")
+tex_altar_sang = load_sprite("assets/sprites/map/obstacles/altar_sanguine.png")
+tex_altar_abyss = load_sprite("assets/sprites/map/obstacles/altar_abyssal.png")
+tex_fissure_erupt = load_sprite("assets/sprites/map/hazards/fissure_eruption.png", (TILE_SIZE, TILE_SIZE))
+tex_fissure_warn = load_sprite("assets/sprites/map/hazards/fissure_warning.png", (TILE_SIZE, TILE_SIZE))
+tex_fissure_dorm = load_sprite("assets/sprites/map/hazards/fissure_dormant.png", (TILE_SIZE, TILE_SIZE))
+tex_carrier = load_sprite("assets/sprites/characters/minion/minion_carrier.png")
+tex_player = load_sprite("assets/sprites/characters/player/player_idle.png")
+tex_guard = load_sprite("assets/sprites/characters/guard/guard_knight.png")
+tex_demon = load_sprite("assets/sprites/characters/demon/demon_boss.png")
+tex_rock_l = load_sprite("assets/sprites/map/obstacles/rock_large.png")
+tex_rock_m = load_sprite("assets/sprites/map/obstacles/rock_medium.png")
+tex_tree = load_sprite("assets/sprites/map/obstacles/tree_large.png")
+tex_crystal = load_sprite("assets/sprites/map/obstacles/crystal_large.png")
+tex_crystal_s = load_sprite("assets/sprites/map/obstacles/crystal_small.png")
+tex_lava_pool_m = load_sprite("assets/sprites/map/lava/lava_pool_medium.png")
+tex_lava_pool_s = load_sprite("assets/sprites/map/lava/lava_pool_small.png")
 
-path_ignis_pintas = bfs(altar_ignis, guard_post, allow_bridges=True)
-path_ignis_raya = bfs(altar_ignis, guard_post, allow_bridges=False)
-path_abyssal_pintas = bfs(altar_abyssal, (22, 19), allow_bridges=True)
-path_abyssal_raya = bfs(altar_abyssal, (22, 19), allow_bridges=False)
+# Fonts
+try:
+    font_title = ImageFont.truetype("arialbd.ttf", 26)
+    font_sub = ImageFont.truetype("arialbd.ttf", 18)
+    font_box = ImageFont.truetype("arial.ttf", 15)
+    font_bold = ImageFont.truetype("arialbd.ttf", 15)
+    font_small = ImageFont.truetype("arial.ttf", 13)
+except Exception:
+    font_title = ImageFont.load_default()
+    font_sub = font_title
+    font_box = font_title
+    font_bold = font_title
+    font_small = font_title
 
-# 2. Rendering High-Definition 2D Map
-fig = plt.figure(figsize=(24, 16), dpi=150, facecolor="#0a0711")
-gs = fig.add_gridspec(1, 2, width_ratios=[1.3, 0.7], wspace=0.08)
-ax_map = fig.add_subplot(gs[0, 0])
-ax_info = fig.add_subplot(gs[0, 1])
+def draw_flowing_lava_rect(canvas, draw, rect):
+    rx1, ry1, rx2, ry2 = rect
+    rh = int(ry2 - ry1)
+    rw = int(rx2 - rx1)
 
-# Map Setup
-ax_map.set_facecolor("#0a0711")
-ax_map.set_xlim(-0.5, WIDTH - 0.5)
-ax_map.set_ylim(HEIGHT - 0.5, -0.5)  # Invert Y so 0 is top
-ax_map.set_aspect("equal")
+    # Fiery underglow
+    draw.rectangle([rx1, ry1, rx2, ry2], fill=(245, 70, 10, 255), outline=(255, 170, 20, 255), width=2)
+    draw.rectangle([rx1 + 3, ry1 + 3, rx2 - 3, ry2 - 3], fill=(255, 120, 15, 230))
 
-COLOR_GROUND_CASTLE = "#1b1426"
-COLOR_GROUND_WILD = "#18151f"
-COLOR_OBSTACLE_WALL = "#312842"
-COLOR_OBSTACLE_ROCK = "#292133"
-COLOR_LAVA = "#941f05"
-COLOR_LAVA_CORE = "#e65100"
-COLOR_BRIDGE = "#423b54"
+    # Tiled seamless grand horizontal river texture (zero internal rock stripes!)
+    river_tex = tex_river_grand if tex_river_grand else tex_river_h
+    if river_tex:
+        tw = river_tex.width
+        th = river_tex.height
+        for x in range(int(rx1), int(rx2), tw):
+            cw = min(tw, int(rx2 - x))
+            crop_part = river_tex.crop((0, 0, cw, min(th, rh)))
+            canvas.paste(crop_part, (x, int(ry1)), crop_part)
 
-# Draw Grid Cells
-for y in range(HEIGHT):
+def draw_stone_bridge(canvas, draw, bx, by, bw, bh, is_shortcut=False):
+    ts = TILE_SIZE
+    if is_shortcut:
+        # Volcanic Iron-Grated Causeway for Shortcut (Scorched Basalt & Iron Beams)
+        draw.rectangle([bx, by, bx + bw, by + bh], fill=(32, 18, 20, 255), outline=(230, 75, 25, 255), width=3)
+        draw.rectangle([bx + 3, by, bx + bw - 3, by + bh], fill=(42, 22, 25, 255))
+        # Iron reinforcement cross-beams
+        draw.line([(bx, by), (bx + bw, by)], fill=(230, 85, 35, 255), width=5)
+        draw.line([(bx, by + bh), (bx + bw, by + bh)], fill=(230, 85, 35, 255), width=5)
+        draw.line([(bx, by), (bx, by + bh)], fill=(200, 60, 20, 255), width=4)
+        draw.line([(bx + bw, by), (bx + bw, by + bh)], fill=(200, 60, 20, 255), width=4)
+    else:
+        # Sturdy Ancient Stone Viaduct for Safe Road
+        draw.rectangle([bx, by, bx + bw, by + bh], fill=(44, 40, 52, 255), outline=(100, 95, 120, 255), width=3)
+        draw.rectangle([bx + 3, by, bx + bw - 3, by + bh], fill=(54, 50, 64, 255))
+        for dx in range(ts, bw, ts):
+            draw.line([(bx + dx, by + 2), (bx + dx, by + bh - 2)], fill=(24, 20, 30, 200), width=2)
+        for dy in range(ts, bh, ts):
+            draw.line([(bx + 2, by + dy), (bx + bw - 2, by + dy)], fill=(32, 28, 40, 180), width=1)
+        draw.line([(bx, by), (bx + bw, by)], fill=(150, 145, 170, 255), width=4)
+        draw.line([(bx, by + bh), (bx + bw, by + bh)], fill=(150, 145, 170, 255), width=4)
+        draw.line([(bx, by), (bx, by + bh)], fill=(130, 125, 150, 255), width=4)
+        draw.line([(bx + bw, by), (bx + bw, by + bh)], fill=(130, 125, 150, 255), width=4)
+        if tex_rock_m:
+            sp = tex_rock_m.resize((16, 16), Image.Resampling.LANCZOS)
+            canvas.paste(sp, (bx - 4, by - 6), sp)
+            canvas.paste(sp, (bx + bw - 12, by - 6), sp)
+            canvas.paste(sp, (bx - 4, by + bh - 8), sp)
+            canvas.paste(sp, (bx + bw - 12, by + bh - 8), sp)
+
+def draw_badge(draw, x, y, text, bg_col, border_col, txt_col=(255, 255, 255), pad=6):
+    bbox = draw.textbbox((0, 0), text, font=font_sub)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    draw.rectangle([x - pad, y - pad, x + tw + pad, y + th + pad], fill=bg_col, outline=border_col, width=2)
+    draw.text((x, y), text, font=font_sub, fill=txt_col)
+
+def generate_final_map():
+    img_w = WIDTH * TILE_SIZE
+    img_h = HEIGHT * TILE_SIZE
+    canvas = Image.new("RGBA", (img_w, img_h), (20, 18, 22, 255))
+    draw = ImageDraw.Draw(canvas)
+    ts = TILE_SIZE
+
+    # 1. Base Castle Floor (y = 0 .. 16)
+    for y in range(0, WALL_Y_TOP * ts, 64):
+        for x in range(0, img_w, 64):
+            if tex_castle: canvas.paste(tex_castle, (x, y))
+            else: draw.rectangle([x, y, x + 64, y + 64], fill=(28, 24, 32))
+    draw.rectangle([0, 0, img_w, WALL_Y_TOP * ts], fill=(0, 0, 10, 35))
+
+    # 2. Base Wilderness Floor (y = 17 .. 55)
+    for y in range(WALL_Y_TOP * ts, img_h, 64):
+        for x in range(0, img_w, 64):
+            if tex_wild: canvas.paste(tex_wild, (x, y))
+            else: draw.rectangle([x, y, x + 64, y + 64], fill=(36, 30, 30))
+
+    # 3. Castle Red Carpet & Throne Room
+    carpet_x1 = 24 * ts
+    carpet_x2 = 28 * ts
+    carpet_y1 = 4 * ts
+    carpet_y2 = WALL_Y_TOP * ts
+    draw.rectangle([carpet_x1, carpet_y1, carpet_x2, carpet_y2], fill=(140, 15, 25, 200), outline=(225, 185, 55, 230), width=3)
+
+    if tex_throne:
+        tw = int(tex_throne.width * 0.45)
+        th = int(tex_throne.height * 0.45)
+        sthrone = tex_throne.resize((tw, th), Image.Resampling.LANCZOS)
+        canvas.paste(sthrone, (int((CENTER_X + 0.5) * ts - tw / 2), int(2.5 * ts - th / 2)), sthrone)
+
+    if tex_demon:
+        dw = int(tex_demon.width * 0.38)
+        dh = int(tex_demon.height * 0.38)
+        sdemon = tex_demon.resize((dw, dh), Image.Resampling.LANCZOS)
+        canvas.paste(sdemon, (int((CENTER_X + 0.5) * ts - dw / 2), int(4.0 * ts)), sdemon)
+
+    # Castle Pillars
+    if tex_wall_pil:
+        spil = tex_wall_pil.resize((int(tex_wall_pil.width * 0.28), int(tex_wall_pil.height * 0.28)), Image.Resampling.LANCZOS)
+        for py in [6, 10, 14]:
+            for px in [10, 16, 35, 41]:
+                canvas.paste(spil, (int((px + 0.5) * ts - spil.width / 2), int((py + 0.9) * ts - spil.height / 2)), spil)
+
+    # Castle Front Wall
+    if tex_wall_str:
+        swall = tex_wall_str.resize((int(tex_wall_str.width * 0.25), int(tex_wall_str.height * 0.25)), Image.Resampling.LANCZOS)
+        for x in range(1, WIDTH - 1, 2):
+            if x not in [23, 24, 25, 26, 27]:
+                canvas.paste(swall, (int((x + 0.5) * ts - swall.width / 2), int(WALL_Y_TOP * ts - 4)), swall)
+
+    # Gate & Guard
+    if tex_gate:
+        sgate = tex_gate.resize((int(tex_gate.width * 0.38), int(tex_gate.height * 0.38)), Image.Resampling.LANCZOS)
+        canvas.paste(sgate, (int(24 * ts + (4 * ts - sgate.width) / 2), int(WALL_Y_TOP * ts - 12)), sgate)
+
+    if tex_guard:
+        sguard = tex_guard.resize((int(tex_guard.width * 0.35), int(tex_guard.height * 0.35)), Image.Resampling.LANCZOS)
+        canvas.paste(sguard, (int(26 * ts - sguard.width / 2), int(20 * ts - 8)), sguard)
+
+    # --------------------------------------------------------------------------
+    # 4. ROADWAYS & PAVEMENT ("KAYA ASPAL ATAU JEMBATAN KE JALAN TERSEBUT")
+    # --------------------------------------------------------------------------
+    # A. JALUR UTAMA (MAIN SAFE ROAD): Sturdy Slate Cobblestone Highway
+    safe_road_fill = (45, 40, 52, 215)
+    safe_kerb_col = (100, 90, 120, 230)
+
+    # West Paved Highway:
+    draw.rectangle([6 * ts, 20 * ts, 10 * ts, 43 * ts], fill=safe_road_fill, outline=safe_kerb_col, width=2)
+    draw.rectangle([10 * ts, 20 * ts, 24 * ts, 22 * ts], fill=safe_road_fill, outline=safe_kerb_col, width=1)
+    draw.rectangle([6 * ts, 41 * ts, 25 * ts, 43 * ts], fill=safe_road_fill, outline=safe_kerb_col, width=1)
+
+    # East Paved Highway:
+    draw.rectangle([42 * ts, 20 * ts, 46 * ts, 43 * ts], fill=safe_road_fill, outline=safe_kerb_col, width=2)
+    draw.rectangle([28 * ts, 20 * ts, 42 * ts, 22 * ts], fill=safe_road_fill, outline=safe_kerb_col, width=1)
+    draw.rectangle([25 * ts, 41 * ts, 46 * ts, 43 * ts], fill=safe_road_fill, outline=safe_kerb_col, width=1)
+
+    # Decorative paver tiles on safe road
+    for py in range(21, 42, 3):
+        draw.line([(6 * ts + 2, py * ts), (10 * ts - 2, py * ts)], fill=(28, 24, 34, 200), width=1)
+        draw.line([(42 * ts + 2, py * ts), (46 * ts - 2, py * ts)], fill=(28, 24, 34, 200), width=1)
+
+    # B. JALUR PINTAS (SHORTCUT ROAD): Scorched Volcanic Basalt Highway (DIBUAT LEBIH BEDA & BERBAHAYA!)
+    sc_road_fill = (34, 16, 18, 235)
+    sc_kerb_col = (230, 70, 20, 245)
+    draw.rectangle([24 * ts, 21 * ts, 28 * ts, 42 * ts], fill=sc_road_fill, outline=sc_kerb_col, width=2)
+
+    # --------------------------------------------------------------------------
+    # 5. THE GREAT MOLTEN LAVA RIVER (y = 29 .. 34)
+    # --------------------------------------------------------------------------
+    river_rect = [1 * ts, 29 * ts, (WIDTH - 1) * ts, 35 * ts]
+    draw_flowing_lava_rect(canvas, draw, river_rect)
+
+    # Three Strategic Bridges:
+    # West Safe Bridge (x = 6..9, y = 29..34)
+    draw_stone_bridge(canvas, draw, 6 * ts, 29 * ts, 4 * ts, 6 * ts, is_shortcut=False)
+    # East Safe Bridge (x = 42..45, y = 29..34)
+    draw_stone_bridge(canvas, draw, 42 * ts, 29 * ts, 4 * ts, 6 * ts, is_shortcut=False)
+    # Central Shortcut Bridge (x = 24..27, y = 29..34) - Scorched & Glowing!
+    draw_stone_bridge(canvas, draw, 24 * ts, 29 * ts, 4 * ts, 6 * ts, is_shortcut=True)
+
+    # Magma Hazard Fissures on the Central Shortcut Bridge (y = 30..33, x = 24..27)
+    for fy in range(30, 34):
+        for fx in [24, 25, 26, 27]:
+            px = fx * ts
+            py = fy * ts
+            tex_f = tex_fissure_dorm if fy == 30 else (tex_fissure_warn if fy == 31 else tex_fissure_erupt)
+            if tex_f: canvas.paste(tex_f, (px, py), tex_f)
+
+    # --------------------------------------------------------------------------
+    # 6. RICH WILDERNESS OBSTACLES (TREES, ROCKS, CRYSTALS, LAVA POOLS)
+    # --------------------------------------------------------------------------
+    # A. Riverbank Watchtowers & Fortress Battlements
+    if tex_wall_twr:
+        stwr = tex_wall_twr.resize((28, 48), Image.Resampling.LANCZOS)
+        for bx in [5, 10, 23, 28, 41, 46]:
+            canvas.paste(stwr, (bx * ts, int(27.8 * ts)), stwr)
+            canvas.paste(stwr, (bx * ts, int(34.8 * ts)), stwr)
+
+    if tex_wall_str:
+        sw = tex_wall_str.resize((24, 24), Image.Resampling.LANCZOS)
+        for x in [3, 4, 11, 12, 21, 22, 29, 30, 39, 40, 47, 48]:
+            canvas.paste(sw, (x * ts, int(28.5 * ts)), sw)
+            canvas.paste(sw, (x * ts, int(35.0 * ts)), sw)
+
+    # B. Imposing Charred Trees in Wilderness Wings
+    if tex_tree:
+        stree = tex_tree.resize((50, 68), Image.Resampling.LANCZOS)
+        tree_north = [(3, 24), (12, 25), (15, 22), (36, 22), (39, 25), (48, 24)]
+        for tx, ty in tree_north:
+            canvas.paste(stree, (tx * ts, ty * ts), stree)
+        tree_south = [(3, 37), (13, 38), (38, 38), (48, 37)]
+        for tx, ty in tree_south:
+            canvas.paste(stree, (tx * ts, ty * ts), stree)
+
+    # C. Ancient Rock Formations (Boulders)
+    if tex_rock_l:
+        srock_l = tex_rock_l.resize((40, 40), Image.Resampling.LANCZOS)
+        rock_pts = [(18, 24), (32, 24), (18, 38), (32, 38), (2, 44), (49, 44)]
+        for rx, ry in rock_pts:
+            canvas.paste(srock_l, (rx * ts, ry * ts), srock_l)
+
+    if tex_rock_m:
+        srock_m = tex_rock_m.resize((26, 26), Image.Resampling.LANCZOS)
+        mrock_pts = [(14, 27), (37, 27), (14, 36), (37, 36), (3, 30), (48, 30)]
+        for rx, ry in mrock_pts:
+            canvas.paste(srock_m, (rx * ts, ry * ts), srock_m)
+
+    # D. Glowing Elemental Crystals (Spreading Volcanic Ambience)
+    if tex_crystal:
+        scrys = tex_crystal.resize((34, 46), Image.Resampling.LANCZOS)
+        crys_pts = [(16, 26), (35, 26), (16, 37), (35, 37), (4, 48), (47, 48)]
+        for cx, cy in crys_pts:
+            canvas.paste(scrys, (cx * ts, cy * ts), scrys)
+
+    if tex_crystal_s:
+        scrys_s = tex_crystal_s.resize((20, 28), Image.Resampling.LANCZOS)
+        for cx, cy in [(20, 26), (31, 26), (20, 37), (31, 37)]:
+            canvas.paste(scrys_s, (cx * ts, cy * ts), scrys_s)
+
+    # E. Decorative Natural Lava Pools in Outer Corners
+    if tex_lava_pool_m:
+        mlava = tex_lava_pool_m.resize((64, 48), Image.Resampling.LANCZOS)
+        canvas.paste(mlava, (2 * ts, 21 * ts), mlava)
+        canvas.paste(mlava, (48 * ts - 24, 21 * ts), mlava)
+
+    if tex_lava_pool_s:
+        slava = tex_lava_pool_s.resize((48, 36), Image.Resampling.LANCZOS)
+        canvas.paste(slava, (2 * ts + 10, 42 * ts), slava)
+        canvas.paste(slava, (48 * ts - 20, 42 * ts), slava)
+
+    # --------------------------------------------------------------------------
+    # 7. SOUTHERN SACRED WELL SANCTUARY (y = 42 .. 54)
+    # --------------------------------------------------------------------------
+    sanct_center = (CENTER_X * ts + ts // 2, 49 * ts + ts // 2)
+    draw.ellipse([sanct_center[0] - 470, sanct_center[1] - 145, sanct_center[0] + 470, sanct_center[1] + 145],
+                 outline=(200, 70, 130, 170), width=3)
+    draw.ellipse([sanct_center[0] - 450, sanct_center[1] - 130, sanct_center[0] + 450, sanct_center[1] + 130],
+                 outline=(240, 150, 70, 130), width=2)
+
+    altars = {
+        "Ignis Altar (Flame)": (17, 49),
+        "Sanguine Well (Blood)": (25, 50),
+        "Abyssal Fissure (Shadow)": (33, 49)
+    }
+    def paste_altar(tex, grid_pt):
+        if not tex: return
+        aw = int(tex.width * 0.48)
+        ah = int(tex.height * 0.48)
+        saltar = tex.resize((aw, ah), Image.Resampling.LANCZOS)
+        ax = int(grid_pt[0] * ts + (ts - aw) / 2)
+        ay = int(grid_pt[1] * ts + (ts - ah) / 2 - 8)
+        draw.ellipse([ax + 8, ay + ah - 14, ax + aw - 8, ay + ah + 4], fill=(0, 0, 0, 120))
+        canvas.paste(saltar, (ax, ay), saltar)
+
+    paste_altar(tex_altar_ignis, altars["Ignis Altar (Flame)"])
+    paste_altar(tex_altar_sang, altars["Sanguine Well (Blood)"])
+    paste_altar(tex_altar_abyss, altars["Abyssal Fissure (Shadow)"])
+
+    # Carrier Minion Sprite at Simpang
+    if tex_carrier:
+        fw = tex_carrier.width // 16
+        fh = tex_carrier.height
+        frame_carrier = tex_carrier.crop((0, 0, fw, fh))
+        scarrier = frame_carrier.resize((int(fw * 1.1), int(fh * 1.1)), Image.Resampling.LANCZOS)
+        mx = int(25.5 * ts - scarrier.width / 2)
+        my = int(42.5 * ts - scarrier.height / 2)
+        draw.ellipse([mx + 6, my + scarrier.height - 10, mx + scarrier.width - 6, my + scarrier.height], fill=(0, 0, 0, 160))
+        canvas.paste(scarrier, (mx, my), scarrier)
+
+    # Player Hero Sprite (Near Safe Road Interception Point)
+    if tex_player:
+        frame_player = tex_player.crop((0, 0, 100, 150))
+        splayer = frame_player.resize((40, 60), Image.Resampling.LANCZOS)
+        canvas.paste(splayer, (int(8.0 * ts - 20), int(24.0 * ts - 30)), splayer)
+
+    # --------------------------------------------------------------------------
+    # 8. ROUTE OVERLAY LINES & CALLOUT BADGES
+    # --------------------------------------------------------------------------
+    # Red Dashed Line straight through Shortcut
+    for y in range(21, 42, 2):
+        draw.line([(26.0 * ts, y * ts), (26.0 * ts, (y + 1) * ts)], fill=(255, 60, 20, 255), width=5)
+
+    # Green Solid Line for Safe Roads
+    safe_pts_west = [
+        (25.5 * ts, 42.0 * ts),
+        (8.0 * ts, 42.0 * ts),
+        (8.0 * ts, 21.0 * ts),
+        (24.0 * ts, 21.0 * ts)
+    ]
+    for i in range(len(safe_pts_west) - 1):
+        draw.line([safe_pts_west[i], safe_pts_west[i+1]], fill=(35, 230, 120, 230), width=5)
+
+    safe_pts_east = [
+        (25.5 * ts, 42.0 * ts),
+        (44.0 * ts, 42.0 * ts),
+        (44.0 * ts, 21.0 * ts),
+        (28.0 * ts, 21.0 * ts)
+    ]
+    for i in range(len(safe_pts_east) - 1):
+        draw.line([safe_pts_east[i], safe_pts_east[i+1]], fill=(35, 230, 120, 230), width=5)
+
+    # Outer perimeter walls
+    for y in range(HEIGHT):
+        draw.rectangle([0, y * ts, ts, (y + 1) * ts], fill=(15, 12, 18))
+        draw.rectangle([(WIDTH - 1) * ts, y * ts, WIDTH * ts, (y + 1) * ts], fill=(15, 12, 18))
     for x in range(WIDTH):
-        t = grid[y][x]
-        rect_color = COLOR_GROUND_WILD
-        if y < 17:
-            rect_color = COLOR_GROUND_CASTLE
-        
-        if t == TileType["OBSTACLE"]:
-            if y < 20:
-                rect_color = COLOR_OBSTACLE_WALL
-            else:
-                rect_color = COLOR_OBSTACLE_ROCK
-        elif t == TileType["LAVA"]:
-            rect_color = COLOR_LAVA
-        elif t == TileType["BRIDGE"]:
-            rect_color = COLOR_BRIDGE
+        draw.rectangle([x * ts, 0, (x + 1) * ts, ts], fill=(15, 12, 18))
+        draw.rectangle([x * ts, (HEIGHT - 1) * ts, (x + 1) * ts, HEIGHT * ts], fill=(15, 12, 18))
 
-        rect = patches.Rectangle((x - 0.5, y - 0.5), 1.0, 1.0,
-                                 facecolor=rect_color,
-                                 edgecolor="#110d18",
-                                 linewidth=0.35)
-        ax_map.add_patch(rect)
+    # Zone Badges
+    draw_badge(draw, img_w // 2 - 270, 16, "ZONA 1: GRAND OBSIDIAN CASTLE & TAHTA BOS", (15, 12, 20, 235), (180, 150, 40), (255, 220, 100))
+    draw_badge(draw, img_w // 2 - 235, 19 * ts - 28, "GERBANG BENTENG & POS PENJAGA (s4 / GOAL)", (25, 20, 35, 240), (120, 80, 220), (200, 180, 255))
+    draw_badge(draw, img_w // 2 - 190, 42 * ts - 12, "SIMPANG LEMBAH (s1: TITIK KEPUTUSAN MDP)", (30, 25, 45, 245), (255, 220, 60), (255, 240, 120))
+    draw_badge(draw, img_w // 2 - 270, 52 * ts + 8, "SACRED WELL SANCTUARY (AREA SUMUR & ALTAR ELEMEN - s0)", (20, 15, 30, 245), (255, 90, 140), (255, 180, 210))
 
-# Draw Lava Basin Glowing Core Accents
-for y in range(20, 35):
-    for x in list(range(1, 5)) + list(range(7, 21)) + list(range(23, 37)) + list(range(39, WIDTH - 1)):
-        if (x, y) not in bridge_tiles:
-            dot = patches.Circle((x, y), 0.20, facecolor=COLOR_LAVA_CORE, edgecolor="none", alpha=0.75)
-            ax_map.add_patch(dot)
+    # Path Badges
+    draw_badge(draw, 21 * ts - 60, 24 * ts, "JALUR PINTAS (JALAN BASALT MERAH BERBAHAYA)", (40, 10, 10, 245), (255, 60, 20), (255, 130, 90))
+    draw_badge(draw, 21 * ts - 50, 31 * ts, "LAHAR STOKASTIK MELETUP", (50, 15, 10, 245), (255, 160, 30), (255, 210, 110))
+    draw_badge(draw, 4 * ts, 24 * ts, "JALUR UTAMA BARAT (ASPAL BATU AMAN)\n(100% BEBAS HAMBATAN, P_h = 0)", (10, 35, 20, 245), (40, 210, 110), (130, 255, 190))
+    draw_badge(draw, 34 * ts, 24 * ts, "JALUR UTAMA TIMUR (ASPAL BATU AMAN)\n(100% BEBAS HAMBATAN, P_h = 0)", (10, 35, 20, 245), (40, 210, 110), (130, 255, 190))
 
-# Draw Hazard Fissures on Bridges 'd' with Warning Striping
-for bx, by in bridge_tiles:
-    hazard_patch = patches.Rectangle((bx - 0.42, by - 0.42), 0.84, 0.84,
-                                     facecolor="#ff3d00", edgecolor="#ffeb3b",
-                                     linewidth=0.8, alpha=0.55, linestyle="--")
-    ax_map.add_patch(hazard_patch)
-    ax_map.plot(bx, by, marker="^", markersize=3.2, color="#ffffff", alpha=0.9)
+    # Altar Badges
+    draw_badge(draw, altars["Ignis Altar (Flame)"][0] * ts - 35, altars["Ignis Altar (Flame)"][1] * ts + 32, "Ignis Altar (Api)", (30, 15, 10, 220), (255, 100, 20), (255, 180, 100))
+    draw_badge(draw, altars["Sanguine Well (Blood)"][0] * ts - 45, altars["Sanguine Well (Blood)"][1] * ts + 32, "Sanguine Well (Darah)", (35, 10, 20, 220), (255, 40, 80), (255, 150, 180))
+    draw_badge(draw, altars["Abyssal Fissure (Shadow)"][0] * ts - 60, altars["Abyssal Fissure (Shadow)"][1] * ts + 32, "Abyssal Fissure (Bayangan)", (25, 15, 35, 220), (160, 60, 255), (200, 150, 255))
 
-# Zone Divider Lines & Badges
-ax_map.axhline(16.5, color="#ab47bc", linestyle="--", linewidth=1.2, alpha=0.8)
-ax_map.text(3.5, 15.8, "ZONE 1: BOSS THRONE CHAMBER (y = 1..16)",
-            color="#e1bee7", fontsize=8.5, fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="#241233", edgecolor="#ab47bc", alpha=0.9))
+    # Mathematics & Design Callout (Top Right)
+    box_w = 560
+    box_h = 245
+    bx = img_w - box_w - 20
+    by = 35
+    draw.rectangle([bx, by, bx + box_w, by + box_h], fill=(15, 12, 22, 245), outline=(220, 180, 60), width=3)
+    draw.text((bx + 18, by + 12), "DESAIN FINAL PETA 2D TAHAP 4 (MDP & SUNGAI LAHAR)", font=font_sub, fill=(255, 220, 80))
+    draw.line([(bx + 18, by + 36), (bx + box_w - 18, by + 36)], fill=(120, 100, 40), width=1)
 
-ax_map.axhline(19.5, color="#ffa726", linestyle="--", linewidth=1.2, alpha=0.8)
-ax_map.text(3.5, 17.5, "ZONE 2: FORTIFIED CITADEL & GUARD GATE (y = 17..19)",
-            color="#ffe0b2", fontsize=8.5, fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="#2e1905", edgecolor="#ffa726", alpha=0.9))
+    info_lines = [
+        ("Sungai Lahar Menyala:", "Mengalir rapi horizontal di y=29..34 (bebas garis pembatas tengah)"),
+        ("Jalur Utama (Aspal Batu):", "Ubin abu-abu kokoh, 100% bebas bahaya, jarak ~52 langkah"),
+        ("Jalur Pintas (Basalt Merah):", "Jalan batu lahar berurat api & 1 jembatan potong, ~22 langkah"),
+        ("Obstacle Alami:", "Pohon hangus, boulder batu, kristal bercahaya & kolam lahar"),
+        ("Area Sumur Selatan:", "Kuil terpusat khusus untuk 3 altar tanpa labirin membingungkan"),
+        ("Logika Keputusan MDP:", "Normal: a* = PINTAS (Q=7.00) | Asap: a* = RAYA (Q=6.00 > -5.00)"),
+        ("Keunggulan Peta:", "Lapang, kaya aset, tidak monoton, dan alur sangat intuitif!")
+    ]
+    cur_y = by + 46
+    for label, val in info_lines:
+        draw.text((bx + 18, cur_y), label, font=font_bold, fill=(210, 210, 210))
+        draw.text((bx + 225, cur_y), val, font=font_box, fill=(130, 240, 160) if "a*" in val or "Aspal" in label or "Basalt" in val else (255, 235, 140))
+        cur_y += 26
 
-ax_map.text(3.5, 36.2, "ZONE 3: VOLCANIC ASH WILDERNESS & LAVA NETWORKS (y = 20..45)",
-            color="#ffab91", fontsize=8.5, fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="#2b0e06", edgecolor="#ff7043", alpha=0.9))
+    # Legend Box (Top Left)
+    leg_w = 420
+    leg_h = 230
+    lx = 20
+    ly = 35
+    draw.rectangle([lx, ly, lx + leg_w, ly + leg_h], fill=(15, 12, 22, 245), outline=(100, 140, 220), width=3)
+    draw.text((lx + 18, ly + 12), "LEGENDA PETA 2D TAHAP 4 (FINAL)", font=font_sub, fill=(140, 190, 255))
+    draw.line([(lx + 18, ly + leg_w - 18 if False else ly + 36), (lx + leg_w - 18, ly + 36)], fill=(50, 70, 120), width=1)
 
-# Draw Key Entities
-# Boss & Throne
-ax_map.plot(21, 2, marker="s", markersize=14, color="#ffb300", markeredgecolor="#ffffff", markeredgewidth=1.5)
-ax_map.text(21, 1.0, "THRONE (21, 2)", color="#ffecb3", fontsize=8, fontweight="bold", ha="center")
+    legend_items = [
+        ((255, 60, 20), "Jalur Pintas (Basalt Berapi - Letupan Lahar)"),
+        ((35, 230, 120), "Jalur Utama (Aspal Batu Ubin - 100% Aman)"),
+        ((235, 60, 10), "Sungai Lahar Cair (Molten Lava River)"),
+        ((150, 145, 170), "Jembatan Batu Viaduct (Sayap Barat & Timur)"),
+        ((220, 80, 40), "Jembatan Besi Cursed (Tengah - Berisiko)"),
+        ((255, 90, 140), "Sacred Well Sanctuary (Area Khusus Sumur)")
+    ]
+    cur_ly = ly + 46
+    for col, text in legend_items:
+        draw.rectangle([lx + 18, cur_ly + 3, lx + 38, cur_ly + 17], fill=col, outline=(255, 255, 255, 200), width=1)
+        draw.text((lx + 48, cur_ly), text, font=font_box, fill=(235, 235, 245))
+        cur_ly += 28
 
-ax_map.plot(21, 4, marker="D", markersize=15, color="#d50000", markeredgecolor="#ffffff", markeredgewidth=1.5)
-ax_map.text(21, 5.2, "DEMON LORD (BOSS) (21, 4)", color="#ff8a80", fontsize=8, fontweight="bold", ha="center")
+    targets = [
+        os.path.join(BASE_DIR, "laporan_assets", "peta_2d_tahap_4_mdp.png"),
+        os.path.join(ARTIFACT_DIR, "peta_2d_tahap_4_mdp.png"),
+        os.path.join("d:/Tugas/KULIAH/SEMESTER 3/Kecerdasan Buatan/Tugas/tubes/hell-pathfinder/laporan_assets", "peta_2d_tahap_4_mdp.png")
+    ]
+    for target_path in targets:
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        canvas.save(target_path, "PNG")
+        print(f"[OK] Saved Final Map to: {target_path}")
 
-# Guard Post (Collection Point)
-ax_map.plot(21, 19, marker="p", markersize=16, color="#00e676", markeredgecolor="#ffffff", markeredgewidth=1.5)
-ax_map.text(21.5, 18.5, "POS PENJAGA (Goal $s_4$)\nDeliver +10 Reward | (21, 19)",
-            color="#b9f6ca", fontsize=8, fontweight="bold", ha="left",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="#052613", edgecolor="#00e676", alpha=0.9))
-
-# Elemental Altars
-# 1. Ignis (Flame) - Node 1
-ax_map.plot(5, 21, marker="o", markersize=14, color="#ff5722", markeredgecolor="#ffffff", markeredgewidth=1.8)
-ax_map.text(5, 22.8, "IGNIS ALTAR\n(Flame, Node 1)\n(5, 21)", color="#ffab91",
-            fontsize=7.5, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="#291207", edgecolor="#ff5722", alpha=0.85))
-
-# 2. Abyssal (Shadow) - Node 2
-ax_map.plot(38, 21, marker="o", markersize=14, color="#7c4dff", markeredgecolor="#ffffff", markeredgewidth=1.8)
-ax_map.text(38, 22.8, "ABYSSAL FISSURE\n(Shadow, Node 2)\n(38, 21)", color="#b388ff",
-            fontsize=7.5, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="#1b0e2b", edgecolor="#7c4dff", alpha=0.85))
-
-# 3. Sanguine (Blood) - Node 3
-ax_map.plot(21, 38, marker="o", markersize=14, color="#e91e63", markeredgecolor="#ffffff", markeredgewidth=1.8)
-ax_map.text(21, 39.5, "SANGUINE WELL (Blood, Node 3) (21, 38)", color="#f48fb1",
-            fontsize=8, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="#2b0d19", edgecolor="#e91e63", alpha=0.85))
-
-# Player Spawn
-ax_map.plot(21, 42, marker="*", markersize=18, color="#00e5ff", markeredgecolor="#ffffff", markeredgewidth=1.5)
-ax_map.text(21, 43.4, "PLAYER SPAWN (21, 42)", color="#84ffff",
-            fontsize=8, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="#072229", edgecolor="#00e5ff", alpha=0.85))
-
-# Decision Crossroads (Simpang Lembah - s1)
-circle_s1_w = patches.Circle((5.5, 20.0), 1.5, fill=False, edgecolor="#ffeb3b", linewidth=2.4, linestyle="--")
-ax_map.add_patch(circle_s1_w)
-ax_map.text(5.5, 16.5, "SIMPANG $s_1$ (West)\nBellman Decision Node", color="#fff59d", fontsize=7.5, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="#262408", edgecolor="#ffeb3b", alpha=0.85))
-
-circle_s1_e = patches.Circle((37.5, 20.0), 1.5, fill=False, edgecolor="#ffeb3b", linewidth=2.4, linestyle="--")
-ax_map.add_patch(circle_s1_e)
-ax_map.text(37.5, 16.5, "SIMPANG $s_1$ (East)\nBellman Decision Node", color="#fff59d", fontsize=7.5, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="#262408", edgecolor="#ffeb3b", alpha=0.85))
-
-# Draw MDP Policy Trajectories (from Ignis Altar)
-# 1. Jalur Pintas (Risky Shortcut, s2 -> s4)
-if path_ignis_pintas:
-    px = [p[0] for p in path_ignis_pintas]
-    py = [p[1] for p in path_ignis_pintas]
-    ax_map.plot(px, py, color="#ff1744", linewidth=3.4, linestyle="-", alpha=0.9,
-                label=f"Jalur Pintas ($s_2$, Jembatan 'd'): ~{len(path_ignis_pintas)} steps (Risiko Magma f, R=-20)")
-    for i in range(3, len(path_ignis_pintas) - 2, 3):
-        ax_map.annotate("", xy=(px[i+1], py[i+1]), xytext=(px[i], py[i]),
-                        arrowprops=dict(arrowstyle="->", color="#ff5252", lw=2.2))
-
-# 2. Jalur Utama Aman (Safe Detour, s3 -> s4)
-if path_ignis_raya:
-    px = [p[0] for p in path_ignis_raya]
-    py = [p[1] for p in path_ignis_raya]
-    ax_map.plot(px, py, color="#00e676", linewidth=2.8, linestyle="--", alpha=0.9,
-                label=f"Jalur Utama Aman ($s_3$, Detour Flank): ~{len(path_ignis_raya)} steps (100% Aman, Living Cost -2)")
-    for i in range(5, len(path_ignis_raya) - 5, 8):
-        ax_map.annotate("", xy=(px[i+2], py[i+2]), xytext=(px[i], py[i]),
-                        arrowprops=dict(arrowstyle="->", color="#69f0ae", lw=1.8))
-
-# Sensory Telegraph Warning Radii
-warning_zone_w = patches.Rectangle((7.0, 19.5), 14.0, 2.0, fill=True,
-                                   facecolor="#ff9100", alpha=0.22, edgecolor="#ffab40", linewidth=1.5, linestyle=":")
-ax_map.add_patch(warning_zone_w)
-ax_map.text(14.0, 24.5, "Sensor Telegraph Warning Area\nP(W=1|Hazard) = 0.90\nBayes Update $f = 0.10 \\to 0.50$\nPolicy Shift: Pintas $\\to$ Raya",
-            color="#ffe0b2", fontsize=7.8, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.35", facecolor="#261608", edgecolor="#ff9100", alpha=0.9))
-
-warning_zone_e = patches.Rectangle((23.0, 19.5), 14.0, 2.0, fill=True,
-                                   facecolor="#ff9100", alpha=0.22, edgecolor="#ffab40", linewidth=1.5, linestyle=":")
-ax_map.add_patch(warning_zone_e)
-ax_map.text(30.0, 24.5, "Sensor Telegraph Warning Area\nP(W=1|Hazard) = 0.90\nBayes Update $f = 0.10 \\to 0.50$\nPolicy Shift: Pintas $\\to$ Raya",
-            color="#ffe0b2", fontsize=7.8, fontweight="bold", ha="center",
-            bbox=dict(boxstyle="round,pad=0.35", facecolor="#261608", edgecolor="#ff9100", alpha=0.9))
-
-# Flank Path Annotations
-ax_map.text(5.5, 28.5, "Flank 'a'\n(Safe)", color="#a7ffeb", fontsize=7.5, fontweight="bold", ha="center", rotation=90)
-ax_map.text(37.5, 28.5, "Flank 'a'\n(Safe)", color="#a7ffeb", fontsize=7.5, fontweight="bold", ha="center", rotation=90)
-ax_map.text(21.5, 28.5, "Central Avenue\n(Safe Highway)", color="#a7ffeb", fontsize=7.5, fontweight="bold", ha="center", rotation=90)
-
-# Axes Labels & Ticks
-ax_map.set_xticks(range(0, WIDTH, 4))
-ax_map.set_yticks(range(0, HEIGHT, 4))
-ax_map.set_xticklabels(range(0, WIDTH, 4), color="#b0bec5", fontsize=7.5)
-ax_map.set_yticklabels(range(0, HEIGHT, 4), color="#b0bec5", fontsize=7.5)
-ax_map.grid(color="#1a1624", linestyle=":", linewidth=0.5)
-ax_map.set_title("TOPOLOGI PETA 2D ARENA: TAHAP 4 (44 x 46 TILES)\nKeputusan di Bawah Ketidakpastian & Markov Decision Processes (MDP)",
-                 color="#ffffff", fontsize=11, fontweight="bold", pad=12)
-
-# Legend on Map
-leg = ax_map.legend(loc="lower left", fontsize=8, facecolor="#181324", edgecolor="#7c4dff", labelcolor="#e0e0e0")
-
-# =========================================================================
-# RIGHT PANEL: Mathematical & Algorithmic Specifications (Mengacu PDF 09)
-# =========================================================================
-ax_info.set_facecolor("#100b1a")
-ax_info.axis("off")
-
-info_text = """
-===================================================================
-  RANCANGAN MATEMATIS TAHAP 4: KEPUTUSAN DI BAWAH KETIDAKPASTIAN
-  Mengacu: 09_Decision under uncertainity.pdf & PLAN_TAHAP_4.md
-===================================================================
-
-1. FORMULASI MARKOV DECISION PROCESS (MDP)
-   Formal Tuple: < S, A, P, R, γ >
-   • State Space (S):
-     - s0: Altar (Titik Panen: Ignis, Abyssal, Sanguine)
-     - s1: Simpang Lembah (Titik Keputusan Bifurkasi)
-     - s2: Jalur Pintas (Jembatan 'd', Bahaya Magma Stokastik)
-     - s3: Jalur Utama (Detour Flank Aman, 100% Bebas Lahar)
-     - s4: Pos Penjaga (Terminal Goal: Delivery Berhasil)
-     - s5: Magma Trap (Terminal Fail: Terbakar & Kristal Hangus)
-   • Action Space (A):
-     - a_Pintas : Melintasi jembatan retakan magma (Cepat, Risiko f)
-     - a_Raya   : Mengambil jalan aman memutar selatan (Lambat, Aman)
-     - a_Wait   : Diam di petak aman menunggu semburan padam
-     - a_Balik  : Mundur kembali ke Altar
-   • Reward Function (R):
-     - R(Goal s4)       = +10.0 (Reward Pengiriman Sukses)
-     - R(Fail s5)       = -20.0 (Penalti Keranjang Terbakar)
-     - R(Step Non-term) =  -2.0 (Living Cost agar efisien, Slide 23)
-   • Discount Factor (γ)  = 0.80 (Preferensi waktu pengiriman cepat)
-
--------------------------------------------------------------------
-2. ATURAN BAYES (BAYESIAN BELIEF UPDATING)
-   • Prior Belief      : P(Hazard) = 0.10,  P(Safe) = 0.90
-   • Sensor Likelihood : P(W | Hazard) = 0.90, P(W | Safe) = 0.10
-   • Total Evidence P(W):
-     P(W) = (0.90 × 0.10) + (0.10 × 0.90) = 0.09 + 0.09 = 0.18
-   • Posterior Belief (Saat Sinyal Sensor W Aktif / Asap Magma):
-     P(Hazard | W) = (P(W | Hazard) × P(Hazard)) / P(W)
-                   = (0.90 × 0.10) / 0.18 = 0.50 (50% Bahaya!)
-
--------------------------------------------------------------------
-3. VALUE ITERATION & POLICY SHIFT (BELLMAN EQUATION)
-   Q(s, a) = ∑ P(s'|s,a) [ R(s') + γ V(s') ]
-   V(s)    = max_a Q(s, a)
-
-   A. KONDISI NORMAL (f = 0.10, Tanpa Sinyal Bahaya):
-      • Q(s1, a_Pintas) = 0.90(+10) + 0.10(-20) = 9.0 - 2.0 = +7.0
-      • Q(s1, a_Raya)   = -2.0 + 0.80(10.0) = +6.0
-      >>> PILIHAN OPTIMAL: π*(s1) = a_Pintas (7.0 > 6.0)
-
-   B. KONDISI WASPADA (f = 0.50, Retakan Berasap / Sinyal W):
-      • Q(s1, a_Pintas) = 0.50(+10) + 0.50(-20) = 5.0 - 10.0 = -5.0
-      • Q(s1, a_Raya)   = -2.0 + 0.80(10.0) = +6.0
-      >>> PERGESERAN KEBIJAKAN (POLICY SHIFT):
-          π*(s1) BERUBAH DARI a_Pintas KE a_Raya (-5.0 < 6.0)!
-
--------------------------------------------------------------------
-4. SIKLUS RINTANGAN MAGMA SEMI-STOKASTIK (JEMBATAN 'd')
-   • Fase 1 - Dormant  (3.5 - 5.0s): Basalt dingin aman.
-   • Fase 2 - Warning  (1.8s)      : Retakan oranye + asap sulfur (W=1).
-   • Fase 3 - Eruption (1.6s)      : Pilar api lethal (-12 HP Player /
-                                     Kristal Minion tumpah & mundur).
-
--------------------------------------------------------------------
-5. PERBANDINGAN TAHAP 4A (PLAN) vs TAHAP 4B (POLICY):
-   • Classical Plan (STRIPS): [Move -> Harvest -> Move -> Deliver]
-     -> Kaku, gagal total saat rintangan dinamis muncul.
-   • MDP Policy (π: S -> A):
-     -> Fleksibel, langsung re-evaluasi saat ada asap/ancaman musuh.
-===================================================================
-"""
-
-ax_info.text(0.01, 0.98, info_text, transform=ax_info.transAxes,
-             fontsize=7.8, family="monospace", color="#eceff1",
-             verticalalignment="top",
-             bbox=dict(boxstyle="round,pad=0.6", facecolor="#171122", edgecolor="#7c4dff", alpha=0.92))
-
-out_dir1 = "D:/Tugas/KULIAH/SEMESTER 3/Kecerdasan Buatan/Tugas/tubes/infernal-affairs/laporan_assets"
-out_dir2 = "D:/Tugas/KULIAH/SEMESTER 3/Kecerdasan Buatan/Tugas/tubes/hell-pathfinder/laporan_assets"
-artifact_dir = "C:/Users/MyBook Hype AMD/.gemini/antigravity/brain/07868943-55b7-4b4c-ab20-c1b7547b1bbf"
-
-os.makedirs(out_dir1, exist_ok=True)
-os.makedirs(out_dir2, exist_ok=True)
-os.makedirs(artifact_dir, exist_ok=True)
-
-out_file1 = os.path.join(out_dir1, "peta_2d_tahap_4_mdp.png")
-out_file2 = os.path.join(out_dir2, "peta_2d_tahap_4_mdp.png")
-out_artifact = os.path.join(artifact_dir, "peta_2d_tahap_4_mdp.png")
-
-plt.subplots_adjust(left=0.04, right=0.98, top=0.95, bottom=0.05)
-plt.savefig(out_file1, dpi=200, bbox_inches="tight")
-plt.savefig(out_file2, dpi=200, bbox_inches="tight")
-plt.savefig(out_artifact, dpi=200, bbox_inches="tight")
-plt.close()
-
-print("Regenerated 2D Map Tahap 4 with clean non-overlapping typography!")
+if __name__ == "__main__":
+    generate_final_map()

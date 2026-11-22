@@ -41,6 +41,8 @@ var hazard_belief: float = 0.10
 var current_mdp_action: int = MDPSolver.Action.PINTAS
 var alert_badge: Sprite2D = null
 var wait_timer: float = 0.0
+var panic_timer: float = 0.0
+var is_retreating: bool = false
 
 var move_speed: float = 140.0
 var chase_interval: float = 0.45       # AI pathfinding update tick
@@ -171,21 +173,54 @@ func _setup_alert_badge() -> void:
 	if not alert_badge:
 		alert_badge = Sprite2D.new()
 		alert_badge.name = "AlertBadge"
-		var badge_tex = load("res://assets/sprites/ui/effects/alert_hazard.png")
-		if badge_tex:
-			alert_badge.texture = badge_tex
-		alert_badge.scale = Vector2(0.5, 0.5)
-		alert_badge.position = Vector2(12, -22)
-		alert_badge.z_index = 4
+		var balloons_tex = load("res://assets/sprites/ui/effects/emote_balloons.png")
+		if balloons_tex:
+			alert_badge.texture = balloons_tex
+			alert_badge.region_enabled = true
+			alert_badge.region_rect = Rect2(0, 0, 32, 32)
+			alert_badge.scale = Vector2(0.85, 0.85)
+		else:
+			var badge_tex = load("res://assets/sprites/ui/effects/alert_hazard.png")
+			if badge_tex:
+				alert_badge.texture = badge_tex
+			alert_badge.scale = Vector2(0.65, 0.65)
+		alert_badge.position = Vector2(0, -30)
+		alert_badge.z_index = 100
 		alert_badge.visible = false
 		add_child(alert_badge)
 
 func _update_alert_badge() -> void:
 	if not alert_badge:
 		return
-	if hazard_belief >= 0.40:
+
+	# Prioritas 1: Kena semburan api magma / Panik (Tengkorak/Keringat Panik - Frame 2)
+	if panic_timer > 0.0:
 		alert_badge.visible = true
-		alert_badge.scale = Vector2(0.55, 0.55) + Vector2(sin(pulse_time * 6.0) * 0.08, sin(pulse_time * 6.0) * 0.08)
+		if alert_badge.region_enabled:
+			alert_badge.region_rect = Rect2(64, 0, 32, 32) # Frame 2: 'X' / Skull Panic
+		var bounce = sin(pulse_time * 14.0) * 0.12
+		alert_badge.scale = Vector2(0.95 + bounce, 0.95 + bounce)
+		return
+
+	# Prioritas 2: Sedang membawa kristal atau di koridor bahaya (Belief MDP)
+	# Tampilkan '!' oranye jika sensor bahaya aktif (W=1 / Belief tinggi >= 0.35)
+	# Tampilkan '?' biru jika sedang mengevaluasi rute / reroute jalan raya
+	if is_carrier and carried_element != "":
+		alert_badge.visible = true
+		if alert_badge.region_enabled:
+			if hazard_belief >= 0.35 or current_mdp_action == MDPSolver.Action.WAIT:
+				# Tanda Seru Oranye: Mendeteksi uap magma / player bluffing di jembatan
+				alert_badge.region_rect = Rect2(0, 0, 32, 32)
+			else:
+				# Tanda Tanya Biru: Evaluasi rute / memilih jalan aman
+				alert_badge.region_rect = Rect2(32, 0, 32, 32)
+		var bob = sin(pulse_time * 6.0) * 0.08
+		alert_badge.scale = Vector2(0.85 + bob, 0.85 + bob)
+	elif hazard_belief >= 0.35:
+		alert_badge.visible = true
+		if alert_badge.region_enabled:
+			alert_badge.region_rect = Rect2(0, 0, 32, 32)
+		alert_badge.scale = Vector2(0.85, 0.85)
 	else:
 		alert_badge.visible = false
 
@@ -199,16 +234,20 @@ func on_hazard_scorched() -> void:
 		var dropped = carried_element
 		carried_element = ""
 		_update_shard_indicator()
-		_update_alert_badge()
 		hazard_scorched.emit(self, dropped)
-		# Retreat immediately off the burning bridge to safe land
-		if grid_pos.x <= 21:
-			grid_pos = Vector2i(6, 21)
-		else:
-			grid_pos = Vector2i(37, 21)
-		if grid_manager:
-			target_world_pos = grid_manager.grid_to_world(grid_pos)
-		request_new_plan()
+
+	# Set animasi panik & recoil mundur mulus tanpa teleport
+	panic_timer = 2.0
+	is_retreating = true
+	_update_alert_badge()
+
+	# Mundur 2 ubin ke Selatan (menjauh dari jembatan lahar ke daratan aman y=35..36)
+	var retreat_y = mini(grid_manager.height - 2, grid_pos.y + 2)
+	grid_pos = Vector2i(grid_pos.x, retreat_y)
+	if grid_manager:
+		target_world_pos = grid_manager.grid_to_world(grid_pos)
+
+	request_new_plan()
 
 func on_intercepted_by_player() -> void:
 	if carried_element != "":
@@ -293,6 +332,11 @@ func _physics_process(delta: float) -> void:
 	if wait_timer > 0.0:
 		wait_timer -= delta
 
+	if panic_timer > 0.0:
+		panic_timer -= delta
+		if panic_timer <= 0.0:
+			is_retreating = false
+
 	# Pixel-perfect Dynamic Y-Sorting based on minion feet
 	z_index = int(position.y + 10.0)
 
@@ -362,11 +406,8 @@ func _move_toward_target() -> void:
 
 				# --- Tahap 4: Markov Decision Process (MDP) Navigation in Wilderness Chokepoint ---
 				if carried_element != "":
-					# If minion originated from West or East wings, it has a choice: Jembatan Pintas 'd' vs Jalur Aman 'a' -> 'c'
-					var is_left_wing: bool = (spawn_origin.x <= 15 or target_altar_pos.x <= 15)
-					var is_right_wing: bool = (spawn_origin.x >= 28 or target_altar_pos.x >= 28)
-
-					if (is_left_wing or is_right_wing) and grid_pos.y <= 36:
+					# Simpang Lembah (y <= 44): Minion decides between Shortcut Corridor and Main Safe Road
+					if grid_pos.y <= 44:
 						var signal_active = false
 						if hazard_manager:
 							signal_active = hazard_manager.is_hazard_signal_active(grid_pos)
@@ -381,31 +422,36 @@ func _move_toward_target() -> void:
 
 						match current_mdp_action:
 							MDPSolver.Action.WAIT:
-								# If at the threshold right before bridge 'd', pause for safe window
-								if (is_left_wing and grid_pos.x in [6, 7] and grid_pos.y in [20, 21]) or (is_right_wing and grid_pos.x in [36, 37] and grid_pos.y in [20, 21]):
+								# If at the threshold of the shortcut corridor (y = 41..42), pause for safe window
+								if grid_pos.y in [41, 42] and grid_pos.x in [24, 25, 26, 27]:
 									wait_timer = 0.8
 									return
 							MDPSolver.Action.BALIK:
-								# Retreat back towards Altar
+								# Retreat back towards Altar in Southern Sanctuary
 								target = target_altar_pos
 							MDPSolver.Action.RAYA:
-								# Safe Detour via Path 'a' down to Ground 'c' (y=36) and up Central Road
-								if is_left_wing:
-									if grid_pos.y < 35:
-										target = Vector2i(5, 36)
-									elif grid_pos.x < 20:
-										target = Vector2i(21, 36)
+								# Safe Detour via Outer Perimeter Road (100% free of magma hazards)
+								var is_west = (grid_pos.x <= 25)
+								if is_west:
+									if grid_pos.y > 42:
+										target = Vector2i(7, 42)
+									elif grid_pos.x > 9 and grid_pos.y > 21:
+										target = Vector2i(7, 42)
+									elif grid_pos.y > 21:
+										target = Vector2i(7, 20)
 									else:
 										target = target_guard_pos
-								elif is_right_wing:
-									if grid_pos.y < 35:
-										target = Vector2i(38, 36)
-									elif grid_pos.x > 22:
-										target = Vector2i(21, 36)
+								else:
+									if grid_pos.y > 42:
+										target = Vector2i(44, 42)
+									elif grid_pos.x < 42 and grid_pos.y > 21:
+										target = Vector2i(44, 42)
+									elif grid_pos.y > 21:
+										target = Vector2i(44, 20)
 									else:
 										target = target_guard_pos
 							MDPSolver.Action.PINTAS:
-								# Fast direct shortcut across Left or Right Bridge 'd'
+								# Fast direct shortcut cutting straight North through the central corridor
 								target = target_guard_pos
 
 				# Check if arrived at target or directly adjacent

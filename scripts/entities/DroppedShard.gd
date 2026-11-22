@@ -45,23 +45,44 @@ func _setup_visuals() -> void:
 	sprite = Sprite2D.new()
 	sprite.name = "CrystalSprite"
 	var shard_tex: Texture2D = null
-	match element_type.to_lower():
-		"shadow", "void":
-			shard_tex = load("res://assets/sprites/map/obstacles/shard_shadow.png")
-		"blood", "earth", "sanguine":
-			shard_tex = load("res://assets/sprites/map/obstacles/shard_blood.png")
-		_:
-			shard_tex = load("res://assets/sprites/map/obstacles/shard_flame.png")
+	var is_spinning_sheet: bool = false
+	var shard_row: int = 0
+
+	var spinning_sheet = load("res://assets/sprites/map/obstacles/shards_spinning_sheet.png")
+	if spinning_sheet:
+		shard_tex = spinning_sheet
+		is_spinning_sheet = true
+		match element_type.to_lower():
+			"shadow", "void":
+				shard_row = 1
+			"blood", "earth", "sanguine":
+				shard_row = 2
+			_:
+				shard_row = 0
+	else:
+		match element_type.to_lower():
+			"shadow", "void":
+				shard_tex = load("res://assets/sprites/map/obstacles/shard_shadow.png")
+			"blood", "earth", "sanguine":
+				shard_tex = load("res://assets/sprites/map/obstacles/shard_blood.png")
+			_:
+				shard_tex = load("res://assets/sprites/map/obstacles/shard_flame.png")
 
 	if shard_tex:
 		sprite.texture = shard_tex
-		sprite.scale = Vector2(0.35, 0.35)
+		if is_spinning_sheet:
+			sprite.region_enabled = true
+			sprite.region_rect = Rect2(0, shard_row * 32, 32, 32)
+			sprite.scale = Vector2(1.0, 1.0)
+		else:
+			sprite.scale = Vector2(0.35, 0.35)
 	else:
-		# Fallback small crystal
-		var fallback_tex = load("res://assets/sprites/map/obstacles/crystal_small.png")
+		var fallback_tex = load("res://assets/sprites/map/obstacles/crystal_dropped.png")
+		if not fallback_tex:
+			fallback_tex = load("res://assets/sprites/map/obstacles/crystal_small.png")
 		if fallback_tex:
 			sprite.texture = fallback_tex
-			sprite.scale = Vector2(0.4, 0.4)
+			sprite.scale = Vector2(0.7, 0.7)
 			match element_type.to_lower():
 				"shadow": sprite.modulate = Color(0.7, 0.2, 1.0)
 				"blood":  sprite.modulate = Color(1.0, 0.2, 0.2)
@@ -75,7 +96,13 @@ func _process(delta: float) -> void:
 	float_time += delta * 4.0
 	if sprite:
 		sprite.position.y = -6.0 + sin(float_time) * 4.0
-		sprite.rotation = sin(float_time * 0.5) * 0.12
+		if sprite.region_enabled:
+			# Animate 4 frames of spinning shard
+			var frame_idx = int(fmod(float_time * 1.5, 4.0))
+			var row_y = sprite.region_rect.position.y
+			sprite.region_rect = Rect2(frame_idx * 32, row_y, 32, 32)
+		else:
+			sprite.rotation = sin(float_time * 0.5) * 0.12
 
 func collect() -> void:
 	if is_collected:

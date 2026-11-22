@@ -6,7 +6,7 @@
 > - **(2507609) Haddi Fauzan Nurrosid**  
 > - **(2508734) Farell Arrefa Zafhir**  
 >  
-> **Tahap 4 (Expanded):** *Logic, Knowledge-Based Reasoning, Automated Planning (STRIPS Supply Chain), & MDP Decisions Under Uncertainty*  
+> **Tahap 4 (Expanded):** *Logic & Knowledge Representation (Modul 07), Automated Planning STRIPS (Modul 08), & Decisions Under Uncertainty MDP (Modul 09)*  
 > **Engine:** Godot Engine 4.3+ / 4.7+ (GDScript)
 
 ---
@@ -16,14 +16,17 @@
 **Infernal Affairs** adalah game petualangan taktis infernal berbasis 2D yang mengintegrasikan seluruh spektrum kurikulum kecerdasan buatan (*Artificial Intelligence*) ke dalam satu ekosistem terpadu. Proyek ini memadukan pilar utama algoritma AI:
 
 1. **Tahap 1 (Pathfinding & Pursuit):** Pelacakan rute terpendek dinamis (*A\* Search* dengan Manhattan Heuristic vs *Uniform-Cost Search*).
-2. **Tahap 2 (Adversarial Search):** Sistem pertarungan taktis berbasis giliran 1-on-1 (*Turn-Based Duel*) yang diotaki oleh algoritma *Minimax* dengan *Alpha-Beta Pruning* dan *Expectimax*.
+2. **Tahap 2 (Adversarial Search):** Sistem pertarungan taktis berbasis giliran 1-on-1 (*Turn-Based Duel*) yang diotaki oleh algoritma *Minimax* dengan *Alpha-Beta Pruning* dan multi-fungsi evaluasi doktrin.
 3. **Tahap 3 - Modul 5 (Constraint Satisfaction Problem - CSP):** Mesin penata variabel dunia global (*World Procedural Rules*) yang menugaskan identitas, segel, senjata, dan doktrin AI musuh bebas konflik menggunakan *Backtracking Search*, *MRV*, *LCV*, dan *AC-3 Arc Consistency*.
 4. **Tahap 3 - Modul 4 (Local Search Dynamic Balancer):** Sistem penyeimbang tingkat kesulitan adaptif secara *real-time* sebelum memasuki pertarungan menggunakan *Simulated Annealing (SA)* dan *Hill Climbing (HC)* dengan kompensasi daya pasif terbalik.
-5. **Tahap 4 - Modul 6 (Knowledge-Based Logic & Inference Engine):** Penalaran logis dengan observasi parsial (*Partial Observability*). Status segel gerbang (*Gate Seal*) disembunyikan (*Hidden [?]*) dan diungkap melalui pencapaian level (*Level 2 Trigger*), monolog kebangkitan penjaga (*Guard Awakening Event*), dan deduksi *Forward Chaining* berbasis Horn Clauses.
-6. **Tahap 4 - Modul 7 (Automated Planning - STRIPS/PDDL):** Minion bertransformasi menjadi *Autonomous Planning Agents* yang merancang sekuens aksi panen dan suplai secara berkala dari 3 Altar Wilderness menuju Guard dan Boss, mengalirkan penguatan pasif berjenjang (Tier 0 s.d Tier 2).
-7. **Tahap 4 - Modul 8 (Decisions Under Uncertainty & MDP):** Lingkungan stokastik chokepoint lahar. Agen minion dipandu kebijakan optimal $\pi(s)$ berbasis *Maximum Expected Utility (MEU)* dan *Bellman Equation*, dengan pembaruan keyakinan dinamis via *Bayesian Updating* ($P(\text{Hazard}\mid W) = 0.50$) saat menerima observasi asap magma atau sergapan pemain.
+5. **Tahap 4 - Modul 07 (Knowledge-Based Logic & Inference Engine):** Mengacu pada `07_Logic & Representasi Pengetahuan.pdf`. Penalaran logis dengan observasi parsial (*Partial Observability*). Status segel gerbang (*Gate Seal*) disembunyikan (*Hidden [?]*) dan diungkap melalui pencapaian level (*Level 2 Trigger*), monolog kebangkitan penjaga (*Guard Awakening Event*), dan deduksi *Forward Chaining* berbasis Horn Clauses saat pemain menyabotase minion pembawa elemen.
+6. **Tahap 4 - Modul 08 (Automated Planning - STRIPS/PDDL):** Mengacu pada `08_Automated Planning.pdf`. Minion bertransformasi menjadi *Autonomous Planning Agents* yang merancang sekuens aksi otonom: `MOVE(Altar) -> HARVEST(Shard) -> MOVE(Dest) -> DELIVER(Dest)` secara berkala dari 3 Altar Wilderness menuju Guard dan Boss, mengalirkan penguatan pasif berjenjang (Tier 0 s.d Tier 2).
+7. **Tahap 4 - Modul 09 (Decisions Under Uncertainty & MDP):** Mengacu pada `09_Decision under uncertainity.pdf`. Lingkungan stokastik pada rute penyeberangan sungai lahar (*Hazard Shortcut*). Agen minion dipandu kebijakan optimal $\pi^*(s)$ berbasis *Maximum Expected Utility (MEU)* dan *Bellman Equation*, dengan pembaruan keyakinan dinamis via *Bayesian Updating* ($P(\text{Hazard}\mid W) = 0.50$) saat menerima observasi asap magma ($W=1$) yang memicu *Policy Shift* otomatis dari jalan pintas ke jalan raya benteng yang aman.
 
-> 📖 **Dokumentasi Khusus Tahap 4:** Lihat berkas lengkap di [PENJELASAN_IMPLEMENTASI_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PENJELASAN_IMPLEMENTASI_TAHAP_4.md), rancangan matematis di [PLAN_TAHAP_4.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/PLAN_TAHAP_4.md), serta panduan kebutuhan aset pixel art di [DAFTAR_KEBUTUHAN_ASSET.md](file:///c:/Users/richi/Documents/GitHub/infernal-affairs/DAFTAR_KEBUTUHAN_ASSET.md).
+> 📖 **Dokumen Acuan & Hasil Tahap 4:**
+> - [RINGKASAN_HASIL_TAHAP_4.md](file:///d:/Tugas/KULIAH/SEMESTER%203/Kecerdasan%20Buatan/Tugas/tubes/infernal-affairs/RINGKASAN_HASIL_TAHAP_4.md): Rangkuman teknis komprehensif integrasi Modul 07, 08, & 09, hitungan manual Bellman, Bayesian, perbaikan bug, dan katalog aset baru.
+> - [TAHAP_4_LOGIC_AND_PLANNING.md](file:///d:/Tugas/KULIAH/SEMESTER%203/Kecerdasan%20Buatan/Tugas/tubes/infernal-affairs/TAHAP_4_LOGIC_AND_PLANNING.md): Spesifikasi formal PDDL domain & problem supply chain minion.
+> - [PLAN_TAHAP_4.md](file:///d:/Tugas/KULIAH/SEMESTER%203/Kecerdasan%20Buatan/Tugas/tubes/infernal-affairs/PLAN_TAHAP_4.md): Desain awal transisi stokastik dan Bellman Value Iteration.
 
 ---
 
@@ -224,11 +227,13 @@ infernal-affairs/
 
 ### Overworld (Eksplorasi):
 - `W / A / S / D` atau `Tombol Panah`: Bergerak di peta labirin.
+- `Roda Mouse (Scroll Up / Down)`: Zoom In (hingga 2.0x) / Zoom Out (hingga 0.5x) kamera secara halus.
+- `+` / `-` dan `0`: Zoom In, Zoom Out, dan Reset Zoom kamera via keyboard.
 - `M`: Membuka / Menutup **Tahap 4 MDP & Bayesian Value Iteration HUD**.
 - `F3`: Membuka / Menutup **Debug HUD & CSP Inspector**.
 - `P` / `ESC`: Mengaktifkan **Game Pause & Konsep AI Briefing**.
 - `TAB`: Beralih algoritma pathfinding (**A\*** $\leftrightarrow$ **UCS**).
-- `L` / `C`: Naik level instan (*Debug Level Up*).
+- `L` / `C`: Naik level instan (*Debug Level Up* - Memicu Guard Awakening pada Level 2).
 - `K`: Mengaktifkan / Menonaktifkan auto-level sesuai syarat gerbang.
 - `R`: Mengulang sesi overworld dari awal (*Restart Game*).
 
