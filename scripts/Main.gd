@@ -89,6 +89,8 @@ var debug_visible: bool = true
 
 # --- Tahap 3: Player Stats HUD (Bottom Left) ---
 var player_hud_panel: PanelContainer
+var player_hud_toggle_btn: Button
+var player_hud_visible: bool = true
 var hud_avatar_rect: TextureRect
 var hud_level_badge: Label
 var hud_hp_bar: ProgressBar
@@ -1485,6 +1487,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_M:
 				if is_instance_valid(mdp_debug_hud):
 					mdp_debug_hud.visible = not mdp_debug_hud.visible
+			KEY_H:
+				_toggle_player_hud()
 
 func _toggle_algorithm() -> void:
 	_set_algorithm("ucs" if current_algorithm == "astar" else "astar")
@@ -1546,26 +1550,26 @@ func _build_player_stats_hud() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.04, 0.03, 0.08, 0.92)
 	style.border_color = Color(0.0, 0.85, 0.75, 0.85)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.set_content_margin_all(8)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	style.set_content_margin_all(5)
 	player_hud_panel.add_theme_stylebox_override("panel", style)
 
 	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 10)
+	hbox.add_theme_constant_override("separation", 6)
 	player_hud_panel.add_child(hbox)
 
 	# Left Column: Avatar + Level Badge
 	var left_vbox := VBoxContainer.new()
 	left_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	left_vbox.add_theme_constant_override("separation", 4)
+	left_vbox.add_theme_constant_override("separation", 2)
 	hbox.add_child(left_vbox)
 
 	hud_avatar_rect = TextureRect.new()
 	var p_tex = load("res://assets/sprites/characters/player/player_avatar.png")
 	if p_tex:
 		hud_avatar_rect.texture = p_tex
-	hud_avatar_rect.custom_minimum_size = Vector2(46, 46)
+	hud_avatar_rect.custom_minimum_size = Vector2(36, 36)
 	hud_avatar_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	hud_avatar_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	left_vbox.add_child(hud_avatar_rect)
@@ -1573,82 +1577,96 @@ func _build_player_stats_hud() -> void:
 	hud_level_badge = Label.new()
 	hud_level_badge.text = "LV. 1"
 	hud_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hud_level_badge.add_theme_font_size_override("font_size", 11)
+	hud_level_badge.add_theme_font_size_override("font_size", 9)
 	hud_level_badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 	var badge_s := StyleBoxFlat.new()
 	badge_s.bg_color = Color(0.12, 0.08, 0.2, 0.9)
 	badge_s.border_color = Color(1.0, 0.8, 0.2, 0.8)
 	badge_s.set_border_width_all(1)
-	badge_s.set_corner_radius_all(4)
-	badge_s.set_content_margin_all(2)
+	badge_s.set_corner_radius_all(3)
+	badge_s.set_content_margin_all(1)
 	hud_level_badge.add_theme_stylebox_override("panel", badge_s)
 	left_vbox.add_child(hud_level_badge)
 
 	# Right Column: Bars and Stats
 	var right_vbox := VBoxContainer.new()
 	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_vbox.add_theme_constant_override("separation", 3)
+	right_vbox.add_theme_constant_override("separation", 2)
 	hbox.add_child(right_vbox)
 
 	# Row 1: Player Name + Cheat Buttons
 	var r1 := HBoxContainer.new()
+	r1.add_theme_constant_override("separation", 4)
 	right_vbox.add_child(r1)
 
 	var p_name := Label.new()
 	p_name.text = "LOST SOUL KNIGHT"
-	p_name.add_theme_font_size_override("font_size", 11)
+	p_name.add_theme_font_size_override("font_size", 10)
 	p_name.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
 	p_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r1.add_child(p_name)
 
 	hud_auto_btn = Button.new()
-	hud_auto_btn.text = "Auto-Lv: OFF"
+	hud_auto_btn.text = "Auto: OFF"
 	hud_auto_btn.tooltip_text = "Toggle Auto Level-Up Cheat (Shortcut: K)"
-	hud_auto_btn.add_theme_font_size_override("font_size", 9)
-	hud_auto_btn.custom_minimum_size = Vector2(75, 20)
+	hud_auto_btn.add_theme_font_size_override("font_size", 8)
+	hud_auto_btn.custom_minimum_size = Vector2(60, 18)
 	hud_auto_btn.pressed.connect(_toggle_cheat_auto_level)
 	r1.add_child(hud_auto_btn)
 
 	hud_cheat_btn = Button.new()
-	hud_cheat_btn.text = "⚡ +LV [L]"
+	hud_cheat_btn.text = "+LV [L]"
 	hud_cheat_btn.tooltip_text = "Cheat Instant Level Up (Shortcut: L)"
-	hud_cheat_btn.add_theme_font_size_override("font_size", 9)
-	hud_cheat_btn.custom_minimum_size = Vector2(62, 20)
+	hud_cheat_btn.add_theme_font_size_override("font_size", 8)
+	hud_cheat_btn.custom_minimum_size = Vector2(50, 18)
 	var cheat_s := StyleBoxFlat.new()
 	cheat_s.bg_color = Color(0.85, 0.45, 0.05, 0.95)
-	cheat_s.set_corner_radius_all(4)
+	cheat_s.set_corner_radius_all(3)
 	hud_cheat_btn.add_theme_stylebox_override("normal", cheat_s)
 	hud_cheat_btn.pressed.connect(_cheat_level_up)
 	r1.add_child(hud_cheat_btn)
 
 	hud_pause_btn = Button.new()
-	hud_pause_btn.text = "⏸ Pause [P]"
+	hud_pause_btn.text = "Pause [P]"
 	hud_pause_btn.tooltip_text = "Pause Game & Briefing Konsep AI (Shortcut: P / ESC)"
-	hud_pause_btn.add_theme_font_size_override("font_size", 9)
-	hud_pause_btn.custom_minimum_size = Vector2(74, 20)
+	hud_pause_btn.add_theme_font_size_override("font_size", 8)
+	hud_pause_btn.custom_minimum_size = Vector2(58, 18)
 	var pause_s := StyleBoxFlat.new()
 	pause_s.bg_color = Color(0.18, 0.42, 0.85, 0.95)
-	pause_s.set_corner_radius_all(4)
+	pause_s.set_corner_radius_all(3)
 	hud_pause_btn.add_theme_stylebox_override("normal", pause_s)
 	hud_pause_btn.pressed.connect(_toggle_pause_game)
 	r1.add_child(hud_pause_btn)
+
+	# Hide / Minimize Button
+	var hud_hide_btn := Button.new()
+	hud_hide_btn.text = "✖ [H]"
+	hud_hide_btn.tooltip_text = "Sembunyikan / Hide HUD Player (Shortcut: H)"
+	hud_hide_btn.add_theme_font_size_override("font_size", 8)
+	hud_hide_btn.custom_minimum_size = Vector2(32, 18)
+	var hide_s := StyleBoxFlat.new()
+	hide_s.bg_color = Color(0.35, 0.15, 0.20, 0.95)
+	hide_s.set_corner_radius_all(3)
+	hud_hide_btn.add_theme_stylebox_override("normal", hide_s)
+	hud_hide_btn.pressed.connect(_toggle_player_hud)
+	r1.add_child(hud_hide_btn)
 
 	# Row 2: HP Bar
 	var hp_box := HBoxContainer.new()
 	right_vbox.add_child(hp_box)
 	hud_hp_bar = ProgressBar.new()
 	hud_hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hud_hp_bar.custom_minimum_size = Vector2(0, 11)
+	hud_hp_bar.custom_minimum_size = Vector2(0, 9)
 	hud_hp_bar.show_percentage = false
 	var hp_s := StyleBoxFlat.new()
 	hp_s.bg_color = Color(0.0, 0.85, 0.5, 0.9)
-	hp_s.set_corner_radius_all(3)
+	hp_s.set_corner_radius_all(2)
 	hud_hp_bar.add_theme_stylebox_override("fill", hp_s)
 	hp_box.add_child(hud_hp_bar)
 
 	hud_hp_label = Label.new()
 	hud_hp_label.text = "100/100"
-	hud_hp_label.add_theme_font_size_override("font_size", 10)
+	hud_hp_label.add_theme_font_size_override("font_size", 9)
 	hud_hp_label.add_theme_color_override("font_color", Color(0.0, 0.95, 0.85))
 	hp_box.add_child(hud_hp_label)
 
@@ -1657,37 +1675,37 @@ func _build_player_stats_hud() -> void:
 	right_vbox.add_child(exp_box)
 	hud_exp_bar = ProgressBar.new()
 	hud_exp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hud_exp_bar.custom_minimum_size = Vector2(0, 8)
+	hud_exp_bar.custom_minimum_size = Vector2(0, 6)
 	hud_exp_bar.show_percentage = false
 	var exp_s := StyleBoxFlat.new()
 	exp_s.bg_color = Color(0.65, 0.25, 0.95, 0.9)
-	exp_s.set_corner_radius_all(3)
+	exp_s.set_corner_radius_all(2)
 	hud_exp_bar.add_theme_stylebox_override("fill", exp_s)
 	exp_box.add_child(hud_exp_bar)
 
 	hud_exp_label = Label.new()
 	hud_exp_label.text = "EXP: 0/100"
-	hud_exp_label.add_theme_font_size_override("font_size", 9)
+	hud_exp_label.add_theme_font_size_override("font_size", 8)
 	hud_exp_label.add_theme_color_override("font_color", Color(0.8, 0.6, 1.0))
 	exp_box.add_child(hud_exp_label)
 
 	# Row 4: Stats Badges
 	hud_stats_label = Label.new()
 	hud_stats_label.text = "⚔️ Atk: 12  🛡️ Def: 5  🧪 Pot: 1"
-	hud_stats_label.add_theme_font_size_override("font_size", 10)
+	hud_stats_label.add_theme_font_size_override("font_size", 9)
 	hud_stats_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
 	right_vbox.add_child(hud_stats_label)
 
 	# Row 5: Key Badge + Icon
 	var key_row := HBoxContainer.new()
-	key_row.add_theme_constant_override("separation", 6)
+	key_row.add_theme_constant_override("separation", 4)
 	right_vbox.add_child(key_row)
 
 	hud_key_icon = TextureRect.new()
 	var key_tex = load("res://assets/sprites/ui/skills/icon_castle_key.png")
 	if key_tex:
 		hud_key_icon.texture = key_tex
-		hud_key_icon.custom_minimum_size = Vector2(16, 16)
+		hud_key_icon.custom_minimum_size = Vector2(13, 13)
 		hud_key_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		hud_key_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		hud_key_icon.modulate = Color(0.4, 0.4, 0.4, 0.6)
@@ -1695,7 +1713,7 @@ func _build_player_stats_hud() -> void:
 
 	hud_key_badge = Label.new()
 	hud_key_badge.text = "Castle Key: [LOCKED]"
-	hud_key_badge.add_theme_font_size_override("font_size", 9)
+	hud_key_badge.add_theme_font_size_override("font_size", 8)
 	hud_key_badge.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	key_row.add_child(hud_key_badge)
 
@@ -1705,29 +1723,52 @@ func _build_player_stats_hud() -> void:
 		GameState.gate_req_level,
 		csp_result.get("gate_seal", "Seal of Flame")
 	]
-	hud_gate_badge.add_theme_font_size_override("font_size", 9)
+	hud_gate_badge.add_theme_font_size_override("font_size", 8)
 	hud_gate_badge.add_theme_color_override("font_color", Color(1.0, 0.75, 0.2))
 	right_vbox.add_child(hud_gate_badge)
 
 	# Row 7: Tombol Kontrol MDP & Simulasi Tahap 4
 	var mdp_ctrl_row := HBoxContainer.new()
-	mdp_ctrl_row.add_theme_constant_override("separation", 6)
+	mdp_ctrl_row.add_theme_constant_override("separation", 4)
 	right_vbox.add_child(mdp_ctrl_row)
 
 	var btn_warn := Button.new()
 	btn_warn.text = "⚠ Warn (W=1)"
-	btn_warn.add_theme_font_size_override("font_size", 9)
+	btn_warn.tooltip_text = "Nyalakan Retakan Magma / Sensor Bahaya W=1"
+	btn_warn.add_theme_font_size_override("font_size", 8)
+	btn_warn.custom_minimum_size = Vector2(74, 18)
 	btn_warn.pressed.connect(func():
 		if is_instance_valid(hazard_manager):
 			hazard_manager.force_warning_active = not hazard_manager.force_warning_active
+			hazard_manager.force_eruption_active = false
 			btn_warn.text = "✓ Clear (W=0)" if hazard_manager.force_warning_active else "⚠ Warn (W=1)"
 			_on_hazard_phase_changed(hazard_manager.current_phase)
 	)
 	mdp_ctrl_row.add_child(btn_warn)
 
+	var btn_erupt := Button.new()
+	btn_erupt.text = "🔥 Erupt"
+	btn_erupt.tooltip_text = "Nyalakan Tiang Api Erupsi Magma Seketika!"
+	btn_erupt.add_theme_font_size_override("font_size", 8)
+	btn_erupt.custom_minimum_size = Vector2(50, 18)
+	var erupt_s := StyleBoxFlat.new()
+	erupt_s.bg_color = Color(0.85, 0.20, 0.10, 0.95)
+	erupt_s.set_corner_radius_all(3)
+	btn_erupt.add_theme_stylebox_override("normal", erupt_s)
+	btn_erupt.pressed.connect(func():
+		if is_instance_valid(hazard_manager):
+			hazard_manager.force_eruption_active = not hazard_manager.force_eruption_active
+			hazard_manager.force_warning_active = false
+			btn_erupt.text = "✓ Calm" if hazard_manager.force_eruption_active else "🔥 Erupt"
+			btn_warn.text = "⚠ Warn (W=1)"
+			_on_hazard_phase_changed(hazard_manager.current_phase)
+	)
+	mdp_ctrl_row.add_child(btn_erupt)
+
 	var btn_step := Button.new()
 	btn_step.text = "Iter (k+1)"
-	btn_step.add_theme_font_size_override("font_size", 9)
+	btn_step.add_theme_font_size_override("font_size", 8)
+	btn_step.custom_minimum_size = Vector2(56, 18)
 	btn_step.pressed.connect(func():
 		if is_instance_valid(mdp_debug_hud):
 			mdp_debug_hud._on_step_iteration_pressed()
@@ -1736,27 +1777,57 @@ func _build_player_stats_hud() -> void:
 
 	var btn_rst := Button.new()
 	btn_rst.text = "Reset"
-	btn_rst.add_theme_font_size_override("font_size", 9)
+	btn_rst.tooltip_text = "Reset Jembatan ke Kondisi Aman (Clear/Dormant)"
+	btn_rst.add_theme_font_size_override("font_size", 8)
+	btn_rst.custom_minimum_size = Vector2(40, 18)
 	btn_rst.pressed.connect(func():
 		if is_instance_valid(hazard_manager):
 			hazard_manager.force_warning_active = false
+			hazard_manager.force_eruption_active = false
+			hazard_manager._set_phase(StochasticHazardManager.HazardPhase.DORMANT)
 			btn_warn.text = "⚠ Warn (W=1)"
+			btn_erupt.text = "🔥 Erupt"
 		if is_instance_valid(mdp_debug_hud):
 			mdp_debug_hud._on_reset_pressed()
+		_on_hazard_phase_changed(StochasticHazardManager.HazardPhase.DORMANT)
 	)
 	mdp_ctrl_row.add_child(btn_rst)
 
 	var btn_tog_hud := Button.new()
 	btn_tog_hud.text = "HUD [M]"
-	btn_tog_hud.add_theme_font_size_override("font_size", 9)
+	btn_tog_hud.add_theme_font_size_override("font_size", 8)
+	btn_tog_hud.custom_minimum_size = Vector2(50, 18)
 	btn_tog_hud.pressed.connect(func():
 		if is_instance_valid(mdp_debug_hud):
 			mdp_debug_hud.visible = not mdp_debug_hud.visible
 	)
 	mdp_ctrl_row.add_child(btn_tog_hud)
 
+	# Small floating pill button when player HUD is hidden
+	player_hud_toggle_btn = Button.new()
+	player_hud_toggle_btn.name = "PlayerHUDShowBtn"
+	player_hud_toggle_btn.text = "🛡️ Player HUD [H]"
+	player_hud_toggle_btn.tooltip_text = "Tampilkan kembali Player Stats HUD (Shortcut: H)"
+	player_hud_toggle_btn.add_theme_font_size_override("font_size", 9)
+	player_hud_toggle_btn.custom_minimum_size = Vector2(110, 24)
+	player_hud_toggle_btn.z_index = 15
+	var show_s := StyleBoxFlat.new()
+	show_s.bg_color = Color(0.04, 0.03, 0.08, 0.90)
+	show_s.border_color = Color(0.0, 0.85, 0.75, 0.85)
+	show_s.set_border_width_all(1)
+	show_s.set_corner_radius_all(5)
+	show_s.set_content_margin_all(3)
+	player_hud_toggle_btn.add_theme_stylebox_override("normal", show_s)
+	player_hud_toggle_btn.pressed.connect(_toggle_player_hud)
+	player_hud_toggle_btn.visible = false
+	$CanvasLayer.add_child(player_hud_toggle_btn)
+
 	_update_player_stats_hud()
 	_reposition_hud_panels()
+
+func _toggle_player_hud() -> void:
+	player_hud_visible = not player_hud_visible
+	_update_player_stats_hud()
 
 func _reposition_hud_panels() -> void:
 	var vp := get_viewport()
@@ -1765,11 +1836,14 @@ func _reposition_hud_panels() -> void:
 	var vp_size: Vector2 = vp.get_visible_rect().size
 
 	if is_instance_valid(player_hud_panel):
-		var hud_w: float = 455.0
-		var hud_h: float = 190.0
+		var hud_w: float = 385.0
+		var hud_h: float = 142.0
 		player_hud_panel.custom_minimum_size = Vector2(hud_w, hud_h)
 		player_hud_panel.size = Vector2(hud_w, hud_h)
 		player_hud_panel.position = Vector2(16.0, maxf(16.0, vp_size.y - hud_h - 16.0))
+
+	if is_instance_valid(player_hud_toggle_btn):
+		player_hud_toggle_btn.position = Vector2(16.0, maxf(16.0, vp_size.y - 32.0 - 16.0))
 
 	if is_instance_valid(debug_panel):
 		var dbg_w: float = 340.0
@@ -1788,8 +1862,11 @@ func _update_player_stats_hud() -> void:
 	if not is_instance_valid(player_hud_panel):
 		return
 
-	# Only visible when not in battle
-	player_hud_panel.visible = not is_in_battle
+	# Only visible when not in battle and not hidden by user
+	player_hud_panel.visible = (not is_in_battle) and player_hud_visible
+	if is_instance_valid(player_hud_toggle_btn):
+		player_hud_toggle_btn.visible = (not is_in_battle) and (not player_hud_visible)
+
 	if player_hud_panel.visible:
 		_reposition_hud_panels()
 

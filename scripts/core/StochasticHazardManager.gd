@@ -28,6 +28,7 @@ var fissure_tiles: Array[Vector2i] = [
 ]
 
 # --- Timing Configurations ---
+@export var manual_control_only: bool = true
 @export var dormant_min_time: float = 3.5
 @export var dormant_max_time: float = 5.0
 @export var warning_time: float = 1.8
@@ -164,15 +165,20 @@ func _process(delta: float) -> void:
 		player_damage_cooldown -= delta
 
 	# Process phase transition
-	if not force_warning_active and not force_eruption_active:
+	if force_eruption_active:
+		if current_phase != HazardPhase.ERUPTION:
+			_set_phase(HazardPhase.ERUPTION)
+	elif force_warning_active:
+		if current_phase != HazardPhase.WARNING:
+			_set_phase(HazardPhase.WARNING)
+	elif manual_control_only:
+		if current_phase != HazardPhase.DORMANT:
+			_set_phase(HazardPhase.DORMANT)
+	else:
 		phase_timer += delta
 		if phase_timer >= target_phase_duration:
 			phase_timer = 0.0
 			_advance_phase()
-	elif force_eruption_active and current_phase != HazardPhase.ERUPTION:
-		_set_phase(HazardPhase.ERUPTION)
-	elif force_warning_active and current_phase != HazardPhase.WARNING:
-		_set_phase(HazardPhase.WARNING)
 
 	# Redraw animated hazard visuals
 	queue_redraw()

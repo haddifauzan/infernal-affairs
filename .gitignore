@@ -2,12 +2,20 @@
 .godot/
 /android/
 
-# Report assets & temporary screenshots
-laporan_assets/
+# Documents, reports, and office files
+*.docx
+*.doc
+*.pdf
 *.tmp
 
-# Working planning files (only README.md is tracked, except explicit plans)
-PROMPT_ASSETS.md
-LOGIKA_DAN_ALGORITMA.md
-NASKAH_VIDEO_PENJELASAN.md
-*.pdf
+# Screenshots, diagrams, and report assets
+screenshots_laporan/
+laporan_assets/
+
+# Python auxiliary tools and generator scripts (not part of Godot game runtime)
+tools/
+scratch/
+
+# Internal planning and drafting markdown files (Keep README.md clean for submission)
+*.md
+!README.md

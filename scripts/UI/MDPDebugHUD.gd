@@ -198,8 +198,8 @@ func _on_step_iteration_pressed() -> void:
 
 func _on_reset_pressed() -> void:
 	is_force_warning = false
-	btn_toggle_warning.text = "⚠ Force Warning (W=1)"
+	if is_instance_valid(btn_toggle_warning):
+		btn_toggle_warning.text = "⚠ Force Warning (W=1)"
 	current_step_k = 3
 	update_mdp_display(0.10, false)
 	reset_simulation_requested.emit()
-
