@@ -1,4 +1,4 @@
-# 🔥 INFERNAL AFFAIRS: Hybrid AI Game Architecture
+# INFERNAL AFFAIRS: Hybrid AI Game Architecture
 > **Tugas Besar Mata Kuliah Kecerdasan Buatan (Artificial Intelligence)**  
 > **Program Studi Ilmu Komputer — Semester 3**  
 > **Kelompok 10:**  
@@ -11,7 +11,7 @@
 
 ---
 
-## 📌 1. Deskripsi Umum Proyek
+## 1. Deskripsi Umum Proyek
 
 **Infernal Affairs** adalah game petualangan taktis infernal berbasis 2D yang mengintegrasikan seluruh spektrum kurikulum kecerdasan buatan (*Artificial Intelligence*) ke dalam satu ekosistem terpadu. Proyek ini memadukan pilar utama algoritma AI:
 
@@ -23,14 +23,9 @@
 6. **Tahap 4 - Modul 08 (Automated Planning - STRIPS/PDDL):** Mengacu pada `08_Automated Planning.pdf`. Minion bertransformasi menjadi *Autonomous Planning Agents* yang merancang sekuens aksi otonom: `MOVE(Altar) -> HARVEST(Shard) -> MOVE(Dest) -> DELIVER(Dest)` secara berkala dari 3 Altar Wilderness menuju Guard dan Boss, mengalirkan penguatan pasif berjenjang (Tier 0 s.d Tier 2).
 7. **Tahap 4 - Modul 09 (Decisions Under Uncertainty & MDP):** Mengacu pada `09_Decision under uncertainity.pdf`. Lingkungan stokastik pada rute penyeberangan sungai lahar (*Hazard Shortcut*). Agen minion dipandu kebijakan optimal $\pi^*(s)$ berbasis *Maximum Expected Utility (MEU)* dan *Bellman Equation*, dengan pembaruan keyakinan dinamis via *Bayesian Updating* ($P(\text{Hazard}\mid W) = 0.50$) saat menerima observasi asap magma ($W=1$) yang memicu *Policy Shift* otomatis dari jalan pintas ke jalan raya benteng yang aman.
 
-> 📖 **Dokumen Acuan & Hasil Tahap 4:**
-> - [RINGKASAN_HASIL_TAHAP_4.md](file:///d:/Tugas/KULIAH/SEMESTER%203/Kecerdasan%20Buatan/Tugas/tubes/infernal-affairs/RINGKASAN_HASIL_TAHAP_4.md): Rangkuman teknis komprehensif integrasi Modul 07, 08, & 09, hitungan manual Bellman, Bayesian, perbaikan bug, dan katalog aset baru.
-> - [TAHAP_4_LOGIC_AND_PLANNING.md](file:///d:/Tugas/KULIAH/SEMESTER%203/Kecerdasan%20Buatan/Tugas/tubes/infernal-affairs/TAHAP_4_LOGIC_AND_PLANNING.md): Spesifikasi formal PDDL domain & problem supply chain minion.
-> - [PLAN_TAHAP_4.md](file:///d:/Tugas/KULIAH/SEMESTER%203/Kecerdasan%20Buatan/Tugas/tubes/infernal-affairs/PLAN_TAHAP_4.md): Desain awal transisi stokastik dan Bellman Value Iteration.
-
 ---
 
-## 🏛️ 2. Arsitektur Hibrida Integrasi Sistem
+## 2. Arsitektur Hibrida Integrasi Sistem
 
 Sistem menggabungkan penalaran kendala global kualitatif dengan optimasi numerik dinamis lokal:
 
@@ -80,7 +75,7 @@ Sistem menggabungkan penalaran kendala global kualitatif dengan optimasi numerik
 
 ---
 
-## 🧩 3. Modul 5: Constraint Satisfaction Problem (CSP)
+## 3. Modul 5: Constraint Satisfaction Problem (CSP)
 
 Modul ini bertanggung jawab mengatur konsistensi tematik dunia permainan saat sesi baru dimulai.
 
@@ -110,7 +105,7 @@ Modul ini bertanggung jawab mengatur konsistensi tematik dunia permainan saat se
 
 ---
 
-## ⚖️ 4. Modul 4: Local Search Dynamic Balancer
+## 4. Modul 4: Local Search Dynamic Balancer
 
 Modul ini memastikan pertarungan tetap adil dan menantang secara dinamis (*Adaptive Difficulty*) berdasarkan perkembangan nyata pemain.
 
@@ -139,7 +134,7 @@ $$f(S) = -|Power_{\text{NPC}} - (r \times Power_{\text{Player}})|$$
 
 ---
 
-## ⚔️ 5. Turn-Based Adversarial Combat (Minimax Engine)
+## 5. Turn-Based Adversarial Combat (Minimax Engine)
 
 - **Minimax Search dengan Alpha-Beta Pruning:** Mengevaluasi pohon pencarian aksi hingga kedalaman *lookahead* $d \in [1, 3]$ dengan pemangkasan cabang tak berguna (*Pruning Ratio* mencapai 60-80%).
 - **Fungsi Evaluasi Multi-Doktrin:**
@@ -155,7 +150,7 @@ $$f(S) = -|Power_{\text{NPC}} - (r \times Power_{\text{Player}})|$$
 
 ---
 
-## 🎨 6. Aset Visual Baru & User Interface (Tahap 3)
+## 6. Aset Visual Baru & User Interface (Tahap 3)
 
 1. **Katalog Karakter & Penjaga:**
    - *Lesser Imp* (Minion Overworld)
@@ -178,7 +173,7 @@ $$f(S) = -|Power_{\text{NPC}} - (r \times Power_{\text{Player}})|$$
 
 ---
 
-## 📁 7. Struktur Direktori Proyek
+## 7. Struktur Direktori Proyek
 
 ```text
 infernal-affairs/
@@ -223,7 +218,7 @@ infernal-affairs/
 
 ---
 
-## 🎮 8. Panduan Kontrol & Shortcut Keyboard
+## 8. Panduan Kontrol & Shortcut Keyboard
 
 ### Overworld (Eksplorasi):
 - `W / A / S / D` atau `Tombol Panah`: Bergerak di peta labirin.
